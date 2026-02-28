@@ -19,14 +19,18 @@
 # misc
 .DS_Store
 *.pem
+Thumbs.db
 
 # debug
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+*.log
 
-# local env files
+# secrets — never commit real credentials
 .env*.local
+.env.production
+.env.staging
 
 # vercel
 .vercel
@@ -34,3 +38,16 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Prisma — generated client and migration SQL (managed by Prisma CLI)
+/src/generated/
+/prisma/migrations
+
+# Local dev overrides
+docker-compose.override.yml
+
+# IDE / editor
+.idea/
+.vscode/
+*.swp
+*.swo

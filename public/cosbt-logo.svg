@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" fill="none">
+  <!-- Placeholder COSBT logo — replace with the real asset -->
+  <rect width="120" height="120" rx="12" fill="#8B0000"/>
+  <!-- Cross -->
+  <rect x="53" y="20" width="14" height="80" rx="3" fill="white"/>
+  <rect x="22" y="48" width="76" height="14" rx="3" fill="white"/>
+  <!-- Text below cross (optional) -->
+</svg>

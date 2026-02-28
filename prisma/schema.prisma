@@ -1,0 +1,200 @@
+// prisma/schema.prisma
+// Church of Singapore (Bukit Timah) – Camp Hotel Registration
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ─── Enums ────────────────────────────────────────────────────────────────────
+
+enum UserRole {
+  SUPER_ADMIN
+  ADMIN
+  VIEW_ONLY
+}
+
+enum PackageType {
+  SINGLE
+  TWIN
+  TRIPLE
+}
+
+enum PaymentStatus {
+  UNPAID
+  PAID
+  PARTIAL
+}
+
+enum OccupantType {
+  ADULT
+  CHILD_PRIMARY
+  CHILD_PRESCHOOL
+}
+
+/// CWB = child with extra bed | CWOB = child without own bed | NOT_APPLICABLE = adults
+enum BedType {
+  CWB
+  CWOB
+  NOT_APPLICABLE
+}
+
+// ─── Models ───────────────────────────────────────────────────────────────────
+
+/// A camp event (one active at a time — enforced at application level)
+model CampEvent {
+  id                   String    @id @default(cuid())
+  name                 String
+  startDate            DateTime
+  endDate              DateTime
+  venue                String
+  hotelName            String
+  registrationDeadline DateTime
+  isActive             Boolean   @default(false)
+  description          String?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+
+  pricingRubric        PricingRubric?
+  registrations        Registration[]
+  rooms                Room[]
+}
+
+/// Pricing matrix for a CampEvent. One per event.
+model PricingRubric {
+  id                  String    @id @default(cuid())
+  campEventId         String    @unique
+  campEvent           CampEvent @relation(fields: [campEventId], references: [id])
+
+  // Base rates per adult room tier
+  singleAdultRate     Decimal   @db.Decimal(10, 2)
+  twinAdultRate       Decimal   @db.Decimal(10, 2)
+  tripleAdultRate     Decimal   @db.Decimal(10, 2)
+
+  // Student rates per room tier
+  singleStudentRate   Decimal   @db.Decimal(10, 2)
+  twinStudentRate     Decimal   @db.Decimal(10, 2)
+  tripleStudentRate   Decimal   @db.Decimal(10, 2)
+
+  // Child / extra bed add-on rates
+  childPrimaryRate    Decimal   @db.Decimal(10, 2)   // ages 7–12
+  extraBedRate        Decimal   @db.Decimal(10, 2)   // max 1 per room (CWB)
+  preschoolRate       Decimal   @default(0) @db.Decimal(10, 2) // always 0, stored for audit
+
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+}
+
+/// Admin / staff user who manages the system
+model User {
+  id           String    @id @default(cuid())
+  name         String
+  email        String    @unique
+  passwordHash String
+  role         UserRole  @default(VIEW_ONLY)
+  isActive     Boolean   @default(true)
+  createdAt    DateTime  @default(now())
+  lastLoginAt  DateTime?
+
+  auditLogs    AuditLog[]
+
+  @@index([email])
+}
+
+/// One Registration = one Room-In-Charge submission (may contain multiple Rooms)
+model Registration {
+  id                  String    @id @default(cuid())
+  campEventId         String
+  campEvent           CampEvent @relation(fields: [campEventId], references: [id])
+
+  // Room I/C details
+  roomInChargeName    String
+  roomInChargeEmail   String
+  roomInChargeMobile  String
+  roomInChargeChurch  String
+
+  // PDPA consent
+  pdpaConsent         Boolean
+  pdpaConsentAt       DateTime?
+
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  rooms               Room[]
+
+  @@index([campEventId])
+  @@index([roomInChargeEmail])
+}
+
+/// One Room = one hotel room booked, one invoice
+model Room {
+  id             String        @id @default(cuid())
+  registrationId String
+  registration   Registration  @relation(fields: [registrationId], references: [id])
+  campEventId    String
+  campEvent      CampEvent     @relation(fields: [campEventId], references: [id])
+
+  /// SINGLE/TWIN/TRIPLE based on adult+student count only (children are add-ons)
+  packageType    PackageType
+  /// Format: COSBT-YYYY-NNNN, unique, auto-generated
+  invoiceNumber  String        @unique
+  paymentStatus  PaymentStatus @default(UNPAID)
+  adminNotes     String?
+  /// Calculated at write time and stored for reporting
+  totalAmount    Decimal       @db.Decimal(10, 2)
+
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  occupants      Occupant[]
+
+  @@index([registrationId])
+  @@index([campEventId])
+  @@index([paymentStatus])
+}
+
+/// One Occupant per person in a Room.
+/// passportNumber is stored encrypted (AES-256-GCM, see src/lib/encryption.ts)
+model Occupant {
+  id              String       @id @default(cuid())
+  roomId          String
+  room            Room         @relation(fields: [roomId], references: [id])
+
+  fullName        String
+  nationality     String
+  /// Stored as AES-256-GCM ciphertext (base64). Decrypt via lib/encryption.ts
+  passportNumber  String
+  passportExpiry  DateTime
+  occupantType    OccupantType
+  /// If true, applies student room rate instead of adult rate
+  isStudent       Boolean      @default(false)
+  /// CWB/CWOB for children; NOT_APPLICABLE for adults
+  bedType         BedType      @default(NOT_APPLICABLE)
+
+  createdAt       DateTime     @default(now())
+
+  @@index([roomId])
+}
+
+/// Immutable audit trail for sensitive field access and admin actions
+model AuditLog {
+  id          String   @id @default(cuid())
+  userId      String?
+  user        User?    @relation(fields: [userId], references: [id])
+
+  /// e.g. "VIEW_PASSPORT", "UPDATE_PAYMENT", "CREATE_REGISTRATION"
+  action      String
+  targetTable String
+  targetId    String
+  ipAddress   String?
+
+  createdAt   DateTime @default(now())
+
+  @@index([userId])
+  @@index([targetTable, targetId])
+  @@index([createdAt])
+}
