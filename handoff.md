@@ -2,10 +2,12 @@
 
 > **Purpose of this file:** This is a living document maintained to guard against context loss (Claude compaction, app freezes, session resets). It is updated before every context handoff. If starting a fresh Claude session, share this file first and ask Claude to continue from where we left off.
 
-**Last updated:** 2026-02-28
+**Last updated:** 2026-02-28 (end of session 1)
 **Git branch:** `main`
-**Last commit:** `ef3f2df` — feat: COSBT Camp Hotel Registration — initial working build
+**Last commit:** `28c8ab8` — docs: add handoff.md for session continuity and context recovery
+**GitHub repo:** https://github.com/DementedLlama/cosbt-registration (public)
 **Working tree:** Clean (nothing uncommitted)
+**Deployment target:** Vercel + AWS RDS (not yet deployed — next step)
 
 ---
 
@@ -41,20 +43,16 @@
 
 ## Repository State
 
-Two commits on `main`:
+Three commits on `main`:
 
 | Commit | Message |
 |---|---|
 | `fdbcb35` | Initial commit from Create Next App |
 | `ef3f2df` | feat: COSBT Camp Hotel Registration — initial working build |
+| `28c8ab8` | docs: add handoff.md for session continuity and context recovery |
 
-The project is **ready to push to GitHub**. User confirmed: **private repo** on GitHub, **Vercel** deployment.
-
-To push (user must run these themselves):
-```bash
-git remote add origin https://github.com/YOUR_USERNAME/cosbt-camp-registration.git
-git push -u origin main
-```
+**GitHub:** https://github.com/DementedLlama/cosbt-registration (public, pushed ✅)
+**Remote:** `origin` → `https://github.com/DementedLlama/cosbt-registration.git`
 
 ---
 
@@ -233,6 +231,8 @@ AuditLog         id, userId(nullable), action, targetTable, targetId, metadata(J
 - Audit logging
 - GitHub Actions CI (type-check + lint on push/PR)
 - Clean git history, project README, ARCHITECTURE.md
+- `handoff.md` (this file) — committed and updated at end of every session
+- Code pushed to GitHub: https://github.com/DementedLlama/cosbt-registration
 
 ### 🔲 Next to Build (suggested order)
 
@@ -270,6 +270,8 @@ AuditLog         id, userId(nullable), action, targetTable, targetId, metadata(J
 2. Share this `handoff.md` file with Claude
 3. Say: *"Please continue building the COSBT camp registration app. Read the handoff.md for full context and pick up from where we left off."*
 4. Claude should read `handoff.md` plus any relevant source files before starting
+
+**Handoff update cadence:** This file is updated and committed at the end of every working session.
 
 ---
 
