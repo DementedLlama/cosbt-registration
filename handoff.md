@@ -2,11 +2,11 @@
 
 > **Purpose of this file:** This is a living document maintained to guard against context loss (Claude compaction, app freezes, session resets). It is updated before every context handoff. If starting a fresh Claude session, share this file first and ask Claude to continue from where we left off.
 
-**Last updated:** 2026-03-05 (end of session 2)
+**Last updated:** 2026-03-05 (end of session 4)
 **Git branch:** `main`
-**Last commit:** `44f6c75` — feat: admin camp events CRUD — list, create, edit, toggle active
+**Last commit:** See bottom of commit table
 **GitHub repo:** https://github.com/DementedLlama/cosbt-registration (public)
-**Working tree:** Clean (nothing uncommitted)
+**Working tree:** Clean
 **Deployment target:** Vercel + AWS RDS (not yet deployed)
 
 ---
@@ -39,6 +39,11 @@
 - `NEXTAUTH_URL` — canonical URL (`http://localhost:3000` locally)
 - `ENCRYPTION_KEY` — 64-char hex key for AES-256-GCM. **NEVER change this after go-live** or all stored passport numbers become unreadable.
 
+**Prisma 7 import paths (important):**
+- `PrismaClient` → `import { PrismaClient } from "@/generated/prisma/client"`
+- `Prisma` namespace (for `Prisma.RoomWhereInput` etc.) → `import { Prisma } from "@/generated/prisma/client"`
+- `Decimal` type → `import { Decimal } from "@/generated/prisma/internal/prismaNamespace"`
+
 ---
 
 ## Repository State
@@ -50,10 +55,14 @@ Commits on `main`:
 | `fdbcb35` | Initial commit from Create Next App |
 | `ef3f2df` | feat: COSBT Camp Hotel Registration — initial working build |
 | `28c8ab8` | docs: add handoff.md for session continuity and context recovery |
-| `5f1ad2e` | (intermediate, if any) |
+| `5f1ad2e` | docs: update handoff.md — end of session 1 |
 | `44f6c75` | feat: admin camp events CRUD — list, create, edit, toggle active |
+| `411a909` | docs: update handoff.md for session 2 |
+| `de99f5e` | fix: resilient date handling in API GET + restore confirm dialog |
+| `2993cf5` | fix: replace window.confirm with inline two-step confirmation on toggle button |
+| (next)   | feat: admin pricing + registrations CRUD, security fixes, Room I/C UX |
 
-**GitHub:** https://github.com/DementedLlama/cosbt-registration (public, pushed ✅)
+**GitHub:** https://github.com/DementedLlama/cosbt-registration (public)
 **Remote:** `origin` → `https://github.com/DementedLlama/cosbt-registration.git`
 
 ---
@@ -76,9 +85,9 @@ Commits on `main`:
 | `src/components/registration/RegistrationWizard.tsx` | ✅ Done | 3-step client component wizard (~1,000 lines) |
 
 **Wizard step breakdown:**
-- **Step 1 (StepContact):** Room In-Charge — full name, email, mobile, church name, PDPA consent checkbox (with full notice text). Client-side validation before advancing.
-- **Step 2 (StepOccupants):** Dynamic list of OccupantCards (up to 3 adults/students + unlimited children). PricePanel (sticky, live price estimate). Add/remove buttons. CWB extra bed — max 1 per room enforced in UI.
-- **Step 3 (StepReview):** Summary table. Submit button calls `POST /api/registrations`. On success: redirect to `/register/confirmation?invoice=...&name=...&email=...&total=...`.
+- **Step 1 (StepContact):** Contact info — email, mobile, church name, PDPA consent checkbox (with full notice text). No name field — Occupant 1 is automatically assigned as Room I/C. Client-side validation before advancing.
+- **Step 2 (StepOccupants):** Dynamic list of OccupantCards (up to 3 adults/students + unlimited children). Occupant 1 shows a "Room I/C" badge. PricePanel (sticky, live price estimate). Add/remove buttons. CWB extra bed — max 1 per room enforced in UI.
+- **Step 3 (StepReview):** Summary table. Room I/C name derived from `occupants[0].fullName`. Submit button calls `POST /api/registrations`. On success: redirect to `/register/confirmation?invoice=...&name=...&email=...&total=...`.
 
 **Key types in RegistrationWizard.tsx:**
 ```typescript
@@ -109,8 +118,9 @@ type OccupantInput = {
 | `src/app/api/auth/[...nextauth]/route.ts` | ✅ Done | NextAuth handler |
 | `src/app/api/admin/events/route.ts` | ✅ Done | Full GET (list) + POST (create) with Zod date validation, isActive enforcement, audit |
 | `src/app/api/admin/events/[id]/route.ts` | ✅ Done | Full GET (detail) + PUT (update) with Zod date validation, isActive enforcement, audit |
-| `src/app/api/admin/pricing/route.ts` | 🔲 Stub | Returns 501 Not Implemented |
-| `src/app/api/admin/registrations/route.ts` | 🔲 Stub | Returns 501 Not Implemented |
+| `src/app/api/admin/pricing/route.ts` | ✅ Done | GET (?eventId) + POST (upsert) with Zod rate validation, audit (CREATE_PRICING / UPDATE_PRICING) |
+| `src/app/api/admin/registrations/route.ts` | ✅ Done | GET with search, filter (status, eventId), sort, pagination. Queries Room model with registration + event joins |
+| `src/app/api/admin/registrations/[id]/route.ts` | ✅ Done | GET (full detail, passport decrypt for ADMIN+, VIEW_PASSPORT audit) + PUT (payment status + admin notes update) |
 | `src/app/api/admin/users/route.ts` | 🔲 Stub | Returns 501 Not Implemented |
 
 **POST `/api/registrations` flow:**
@@ -133,15 +143,19 @@ type OccupantInput = {
 | File | Status | Notes |
 |---|---|---|
 | `src/app/admin/layout.tsx` | ✅ Done | Sidebar nav, user info bar, role display, sign-out button |
-| `src/app/admin/dashboard/page.tsx` | ✅ Done | Summary stat cards (hardcoded 0s — data fetch is next step) |
+| `src/app/admin/dashboard/page.tsx` | ✅ Done | Summary stat cards with real DB counts (active events, total rooms, unpaid rooms, total revenue) |
 | `src/app/admin/events/page.tsx` | ✅ Done | Full events table: name, dates, hotel, status badge, registrations, pricing, actions |
 | `src/app/admin/events/[id]/page.tsx` | ✅ Done | Edit form (ADMIN+) or read-only detail (VIEW_ONLY), stats bar |
 | `src/app/admin/events/new/page.tsx` | ✅ Done | Create event — renders EventForm in create mode |
 | `src/components/admin/EventForm.tsx` | ✅ Done | Reusable create/edit form with client-side validation |
 | `src/components/admin/ToggleActiveButton.tsx` | ✅ Done | Inline activate/deactivate toggle with confirmation |
-| `src/app/admin/pricing/page.tsx` | 🔲 Stub | "Coming Soon" placeholder |
-| `src/app/admin/registrations/page.tsx` | 🔲 Stub | "Coming Soon" placeholder |
-| `src/app/admin/registrations/[id]/page.tsx` | 🔲 Stub | "Coming Soon" placeholder |
+| `src/app/admin/pricing/page.tsx` | ✅ Done | Events list with pricing status (Configured / Not Set), links to set/edit rates |
+| `src/app/admin/pricing/[eventId]/page.tsx` | ✅ Done | Edit pricing form (ADMIN+) or read-only rate summary (VIEW_ONLY) |
+| `src/components/admin/PricingForm.tsx` | ✅ Done | 9 rate inputs grouped by Adult / Student / Child+Add-on, dollar prefix, decimal validation |
+| `src/app/admin/registrations/page.tsx` | ✅ Done | Table with search, payment filter, event filter, pagination. Columns: invoice, Room I/C, event, package, pax, total, status, date |
+| `src/app/admin/registrations/[id]/page.tsx` | ✅ Done | Full detail: summary cards, Room I/C info, occupant cards with decrypted passports (ADMIN+) or masked (VIEW_ONLY), payment update form |
+| `src/components/admin/RegistrationFilters.tsx` | ✅ Done | Client component: search bar + status dropdown + event dropdown + clear filters |
+| `src/components/admin/PaymentStatusForm.tsx` | ✅ Done | Payment status select + admin notes textarea with save/success feedback |
 | `src/app/admin/users/page.tsx` | ✅ Done | Renders real session user; full management UI is next step |
 | `src/app/(admin-public)/admin/login/page.tsx` | ✅ Done | Login form with NextAuth `signIn("credentials")` |
 
@@ -177,17 +191,21 @@ type OccupantInput = {
 ## Database Schema (Prisma)
 
 ```
-CampEvent        id, name, startDate, endDate, hotelName, registrationDeadline, isActive
-PricingRubric    id, campEventId, packageType(SINGLE/TWIN/TRIPLE), adultRate, studentRate,
-                 primarySchoolRate, preschoolRate, extraBedRate
-Registration     id, invoiceNumber(COSBT-YYYY-NNNN), roomInChargeName/Email/Mobile/Church,
-                 campEventId, paymentStatus(UNPAID/PAID/WAIVED), pdpaConsent/ConsentAt
-Room             id, registrationId, packageType, totalAmount, invoiceNumber(@unique)
+CampEvent        id, name, startDate, endDate, venue, hotelName, registrationDeadline, isActive, description
+PricingRubric    id, campEventId(@unique), singleAdultRate, twinAdultRate, tripleAdultRate,
+                 singleStudentRate, twinStudentRate, tripleStudentRate,
+                 childPrimaryRate, extraBedRate, preschoolRate
+Registration     id, campEventId, roomInChargeName/Email/Mobile/Church,
+                 pdpaConsent, pdpaConsentAt
+Room             id, registrationId, campEventId, packageType(SINGLE/TWIN/TRIPLE),
+                 invoiceNumber(@unique, COSBT-YYYY-NNNN), paymentStatus(UNPAID/PAID/PARTIAL),
+                 adminNotes, totalAmount
 Occupant         id, roomId, fullName, nationality, passportNumber(AES-256-GCM ciphertext),
-                 passportExpiry, occupantType, isStudent, bedType
+                 passportExpiry, occupantType(ADULT/CHILD_PRIMARY/CHILD_PRESCHOOL),
+                 isStudent, bedType(CWB/CWOB/NOT_APPLICABLE)
 User             id, email(@unique), name, role(SUPER_ADMIN/ADMIN/VIEW_ONLY), isActive,
                  passwordHash, lastLoginAt
-AuditLog         id, userId(nullable), action, targetTable, targetId, metadata(JSON), ip, createdAt
+AuditLog         id, userId(nullable), action, targetTable, targetId, ipAddress, createdAt
 ```
 
 **Enums:** `UserRole`, `PackageType`, `PaymentStatus`, `OccupantType`, `BedType`
@@ -205,6 +223,11 @@ AuditLog         id, userId(nullable), action, targetTable, targetId, metadata(J
 | 5 | `src/lib/auth.ts` | Missing `ADMIN_LOGIN` audit log on successful login (required by architecture doc) | Imported `logAudit` and added best-effort `void logAudit(...)` after successful login |
 | 6 | `src/app/admin/layout.tsx` | `role.replace("_", " ")` uses string literal — only replaces first underscore | Changed to `role.replace(/_/g, " ")` |
 | 7 | `RegistrationWizard.tsx` | `{ _key: _ignored, ...rest }` — `_ignored` declared but never used (ESLint warning) | Changed to `{ _key, ...rest }` |
+| 8 | `ToggleActiveButton.tsx` | `currentName` destructured but never used (ESLint, blocked build) | Removed from destructuring |
+| 9 | `route.ts` `buildInvoiceHtml` | XSS vulnerability — user-supplied values interpolated directly into HTML email template | Added `escapeHtml()` and applied to all 9 user-supplied values |
+| 10 | `route.ts` public registrations | Dead `GET` handler never called by any page | Removed handler |
+| 11 | `api/admin/pricing` pricing rate | No-op `.transform((s) => s)` on Zod schema | Removed transform |
+| 12 | `api/admin/registrations/[id]` | `adminNotes` accepted unbounded strings | Added `.max(2000)` to Zod schema |
 
 ---
 
@@ -239,30 +262,29 @@ AuditLog         id, userId(nullable), action, targetTable, targetId, metadata(J
 - Clean git history, project README, ARCHITECTURE.md
 - `handoff.md` (this file) — committed and updated at end of every session
 - Code pushed to GitHub: https://github.com/DementedLlama/cosbt-registration
+- Admin: Camp Events CRUD (session 2, commit `44f6c75`)
+- Admin: Pricing configuration — list events with pricing status, set/edit rates per event, read-only view for VIEW_ONLY (session 3)
+- Admin: Registrations list — table with search, payment status filter, event filter, pagination (session 3)
+- Admin: Registration detail — full room + occupant view, passport decryption for ADMIN+, payment status + admin notes update (session 3)
+- Security audit: XSS fix in email template, dead code removal, unbounded input capping (session 3/4)
+- UX: Room I/C derived from Occupant 1 — removed redundant name field from Step 1 (session 4)
 
 ### 🔲 Next to Build (suggested order)
 
-1. ~~**Admin: Camp Events CRUD**~~ ✅ Done (session 2, commit `44f6c75`)
+1. ~~**Admin: Camp Events CRUD**~~ ✅ Done (session 2)
 
-2. **Admin: Pricing configuration** — `src/app/api/admin/pricing/route.ts` + `src/app/admin/pricing/page.tsx`
-   - Set rates for each `PackageType` for a given event
-   - SINGLE/TWIN/TRIPLE × adultRate/studentRate/primarySchoolRate/preschoolRate/extraBedRate
+2. ~~**Admin: Pricing configuration**~~ ✅ Done (session 3)
 
-3. **Admin: Registrations list** — `src/app/api/admin/registrations/route.ts` + `src/app/admin/registrations/page.tsx`
-   - Table with search, filter by payment status, sort
-   - Columns: invoice number, Room In-Charge name, package type, pax, total, payment status, submitted at
+3. ~~**Admin: Registrations list**~~ ✅ Done (session 3)
 
-4. **Admin: Registration detail view** — `src/app/admin/registrations/[id]/page.tsx`
-   - Show full room + occupant details
-   - Decrypt and display passport numbers (for authorised roles)
-   - Payment status update (mark as PAID/WAIVED)
+4. ~~**Admin: Registration detail view**~~ ✅ Done (session 3)
 
 5. **Admin: User Accounts** — `src/app/api/admin/users/route.ts` + `src/app/admin/users/page.tsx`
    - SUPER_ADMIN only
    - Create user, deactivate/reactivate, reset password
    - List all users with role and last login
 
-6. **Admin: Dashboard data** — wire up the summary cards in `src/app/admin/dashboard/page.tsx` with real DB counts
+6. ~~**Admin: Dashboard data**~~ ✅ Done (already wired up with real DB counts)
 
 7. **Admin: Export** — download registrations as Excel/CSV
 

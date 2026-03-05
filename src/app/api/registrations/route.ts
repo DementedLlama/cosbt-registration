@@ -126,8 +126,16 @@ function calculateTotalAmount(
 
 // ─── Email template ───────────────────────────────────────────────────────────
 
-// Bug fix: removed dead `pricing` param — the function never used it;
-// totalAmount is passed directly and all rate-display logic lives client-side.
+/** Escape HTML special characters to prevent XSS in email templates. */
+function escapeHtml(str: string): string {
+  return str
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 function buildInvoiceHtml(params: {
   invoiceNumber: string;
   roomInChargeName: string;
@@ -159,9 +167,9 @@ function buildInvoiceHtml(params: {
             : "";
       return `
         <tr>
-          <td style="padding:8px 12px;border-bottom:1px solid #eee">${o.fullName}</td>
+          <td style="padding:8px 12px;border-bottom:1px solid #eee">${escapeHtml(o.fullName)}</td>
           <td style="padding:8px 12px;border-bottom:1px solid #eee">${typeLabel}${bedNote}</td>
-          <td style="padding:8px 12px;border-bottom:1px solid #eee">${o.nationality}</td>
+          <td style="padding:8px 12px;border-bottom:1px solid #eee">${escapeHtml(o.nationality)}</td>
         </tr>`;
     })
     .join("");
@@ -177,7 +185,7 @@ function buildInvoiceHtml(params: {
     </div>
     <div style="padding:28px">
       <h2 style="color:#8b0000;margin-top:0;font-size:18px">Invoice Confirmation</h2>
-      <p style="margin-bottom:4px">Dear <strong>${params.roomInChargeName}</strong>,</p>
+      <p style="margin-bottom:4px">Dear <strong>${escapeHtml(params.roomInChargeName)}</strong>,</p>
       <p style="color:#555;margin-top:4px">
         Your room registration has been received. Please keep this email as your invoice.
         Payment instructions will be sent separately by the church office.
@@ -186,31 +194,31 @@ function buildInvoiceHtml(params: {
       <table style="width:100%;border-collapse:collapse;margin:20px 0;font-size:14px">
         <tr>
           <td style="padding:6px 0;color:#777;width:45%">Invoice Number</td>
-          <td style="padding:6px 0;font-weight:700;font-size:16px;color:#8b0000">${params.invoiceNumber}</td>
+          <td style="padding:6px 0;font-weight:700;font-size:16px;color:#8b0000">${escapeHtml(params.invoiceNumber)}</td>
         </tr>
         <tr>
           <td style="padding:6px 0;color:#777">Camp Event</td>
-          <td style="padding:6px 0">${params.eventName}</td>
+          <td style="padding:6px 0">${escapeHtml(params.eventName)}</td>
         </tr>
         <tr>
           <td style="padding:6px 0;color:#777">Dates</td>
-          <td style="padding:6px 0">${params.eventDates}</td>
+          <td style="padding:6px 0">${escapeHtml(params.eventDates)}</td>
         </tr>
         <tr>
           <td style="padding:6px 0;color:#777">Hotel</td>
-          <td style="padding:6px 0">${params.hotelName}</td>
+          <td style="padding:6px 0">${escapeHtml(params.hotelName)}</td>
         </tr>
         <tr>
           <td style="padding:6px 0;color:#777">Room Package</td>
-          <td style="padding:6px 0">${params.packageType}</td>
+          <td style="padding:6px 0">${escapeHtml(params.packageType)}</td>
         </tr>
         <tr>
           <td style="padding:6px 0;color:#777">Church / Ministry</td>
-          <td style="padding:6px 0">${params.roomInChargeChurch}</td>
+          <td style="padding:6px 0">${escapeHtml(params.roomInChargeChurch)}</td>
         </tr>
         <tr>
           <td style="padding:6px 0;color:#777">Contact Mobile</td>
-          <td style="padding:6px 0">${params.roomInChargeMobile}</td>
+          <td style="padding:6px 0">${escapeHtml(params.roomInChargeMobile)}</td>
         </tr>
       </table>
 
@@ -431,7 +439,3 @@ export async function POST(req: NextRequest) {
   );
 }
 
-export async function GET(req: NextRequest) {
-  void req;
-  return NextResponse.json({ message: "OK" });
-}

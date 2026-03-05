@@ -20,7 +20,6 @@ interface OccupantInput {
 }
 
 interface ContactState {
-  roomInChargeName: string;
   roomInChargeEmail: string;
   roomInChargeMobile: string;
   roomInChargeChurch: string;
@@ -172,7 +171,6 @@ function StepContact({
 
   function validate(): ContactErrors {
     const e: ContactErrors = {};
-    if (!data.roomInChargeName.trim()) e.roomInChargeName = "Name is required.";
     if (!data.roomInChargeEmail.trim()) {
       e.roomInChargeEmail = "Email is required.";
     } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(data.roomInChargeEmail)) {
@@ -196,31 +194,14 @@ function StepContact({
   return (
     <div>
       <h3 className="text-lg font-semibold text-gray-800 mb-1">
-        Room In-Charge Details
+        Contact Details
       </h3>
       <p className="text-sm text-gray-500 mb-6">
-        These details will appear on the invoice. The invoice will be emailed to
-        you after submission.
+        The invoice will be emailed to you after submission. Occupant 1 in the
+        next step will be assigned as the Room In-Charge.
       </p>
 
       <div className="space-y-4">
-        {/* Name */}
-        <div>
-          <label className="form-label">
-            Full Name <span className="text-red-500">*</span>
-          </label>
-          <input
-            type="text"
-            className="form-input"
-            placeholder="As per passport / NRIC"
-            value={data.roomInChargeName}
-            onChange={(e) => onChange({ roomInChargeName: e.target.value })}
-          />
-          {errors.roomInChargeName && (
-            <p className="text-red-500 text-xs mt-1">{errors.roomInChargeName}</p>
-          )}
-        </div>
-
         {/* Email */}
         <div>
           <label className="form-label">
@@ -317,6 +298,7 @@ function StepContact({
 function OccupantCard({
   occupant,
   index,
+  isRoomIC,
   canRemove,
   cwbAlreadyTaken,
   onChange,
@@ -324,6 +306,7 @@ function OccupantCard({
 }: {
   occupant: OccupantInput;
   index: number;
+  isRoomIC: boolean;
   canRemove: boolean;
   cwbAlreadyTaken: boolean;
   onChange: (patch: Partial<OccupantInput>) => void;
@@ -360,6 +343,11 @@ function OccupantCard({
       <div className="flex items-center justify-between mb-4">
         <h4 className="font-semibold text-gray-800 text-sm">
           Occupant {index + 1}
+          {isRoomIC && (
+            <span className="text-xs font-medium ml-2 px-1.5 py-0.5 rounded bg-blue-100 text-blue-700">
+              Room I/C
+            </span>
+          )}
           {occupant.fullName && (
             <span className="text-gray-400 font-normal ml-2">
               — {occupant.fullName}
@@ -680,6 +668,7 @@ function StepOccupants({
           <p className="text-sm text-gray-500 mb-5">
             Add everyone sharing this room. The room package (Single / Twin /
             Triple) is determined by the number of adults and students.
+            Occupant 1 will be assigned as the Room In-Charge.
           </p>
 
           {occupants.map((occ, idx) => (
@@ -687,6 +676,7 @@ function StepOccupants({
               key={occ._key}
               occupant={occ}
               index={idx}
+              isRoomIC={idx === 0}
               canRemove={occupants.length > 1}
               cwbAlreadyTaken={
                 cwbOccupantKey !== undefined && cwbOccupantKey !== occ._key
@@ -788,7 +778,7 @@ function StepReview({
     try {
       const payload = {
         campEventId,
-        roomInChargeName: contact.roomInChargeName,
+        roomInChargeName: occupants[0].fullName,
         roomInChargeEmail: contact.roomInChargeEmail,
         roomInChargeMobile: contact.roomInChargeMobile,
         roomInChargeChurch: contact.roomInChargeChurch,
@@ -816,7 +806,7 @@ function StepReview({
       // Success — redirect to confirmation
       const params = new URLSearchParams({
         invoice: json.invoiceNumber,
-        name: contact.roomInChargeName,
+        name: occupants[0].fullName,
         email: contact.roomInChargeEmail,
         total: total.toFixed(2),
       });
@@ -852,7 +842,7 @@ function StepReview({
         </div>
         <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
           <dt className="text-gray-500">Name</dt>
-          <dd className="font-medium">{contact.roomInChargeName}</dd>
+          <dd className="font-medium">{occupants[0].fullName}</dd>
           <dt className="text-gray-500">Email</dt>
           <dd className="break-all">{contact.roomInChargeEmail}</dd>
           <dt className="text-gray-500">Mobile</dt>
@@ -972,12 +962,11 @@ function StepReview({
 
 // ─── Main Wizard ──────────────────────────────────────────────────────────────
 
-const STEPS = ["Your Details", "Room Occupants", "Review & Submit"];
+const STEPS = ["Contact Info", "Room Occupants", "Review & Submit"];
 
 export default function RegistrationWizard({ campEventId, pricing }: Props) {
   const [step, setStep] = useState(1);
   const [contact, setContact] = useState<ContactState>({
-    roomInChargeName: "",
     roomInChargeEmail: "",
     roomInChargeMobile: "",
     roomInChargeChurch: "",

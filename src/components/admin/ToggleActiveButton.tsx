@@ -5,13 +5,11 @@ import { useRouter } from "next/navigation";
 
 interface ToggleActiveButtonProps {
     eventId: string;
-    currentName: string;
     isActive: boolean;
 }
 
 export default function ToggleActiveButton({
     eventId,
-    currentName,
     isActive,
 }: ToggleActiveButtonProps) {
     const router = useRouter();

@@ -157,7 +157,6 @@ export default async function EventsPage() {
                           </Link>
                           <ToggleActiveButton
                             eventId={event.id}
-                            currentName={event.name}
                             isActive={event.isActive}
                           />
                         </div>
