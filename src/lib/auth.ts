@@ -4,39 +4,7 @@ import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { prisma } from "./prisma";
 import { logAudit } from "./audit";
-
-// ─── Login Rate Limiter (in-memory, per-email) ──────────────────────────────
-const LOGIN_RATE_WINDOW_MS = 15 * 60_000; // 15 minutes
-const LOGIN_MAX_ATTEMPTS = 5;
-
-const loginAttempts = new Map<string, { count: number; firstAttempt: number }>();
-
-// Periodic cleanup to prevent memory leak
-setInterval(() => {
-  const now = Date.now();
-  loginAttempts.forEach((attempt, email) => {
-    if (now - attempt.firstAttempt > LOGIN_RATE_WINDOW_MS) {
-      loginAttempts.delete(email);
-    }
-  });
-}, 5 * 60_000);
-
-function isLoginRateLimited(email: string): boolean {
-  const now = Date.now();
-  const attempt = loginAttempts.get(email);
-
-  if (!attempt || now - attempt.firstAttempt > LOGIN_RATE_WINDOW_MS) {
-    loginAttempts.set(email, { count: 1, firstAttempt: now });
-    return false;
-  }
-
-  if (attempt.count >= LOGIN_MAX_ATTEMPTS) {
-    return true;
-  }
-
-  attempt.count++;
-  return false;
-}
+import { loginLimiter } from "./redis";
 
 export const authOptions: NextAuthOptions = {
   session: {
@@ -64,8 +32,9 @@ export const authOptions: NextAuthOptions = {
 
         const normalizedEmail = credentials.email.toLowerCase().trim();
 
-        // Rate limit: 5 failed attempts per email per 15 minutes
-        if (isLoginRateLimited(normalizedEmail)) {
+        // Rate limit: 5 failed attempts per email per 15 minutes (Upstash Redis)
+        const { success } = await loginLimiter.limit(normalizedEmail);
+        if (!success) {
           return null;
         }
 
@@ -92,9 +61,6 @@ export const authOptions: NextAuthOptions = {
         if (!isValid) {
           return null;
         }
-
-        // Successful login — clear rate limit counter
-        loginAttempts.delete(normalizedEmail);
 
         // Record last login (fire-and-forget)
         prisma.user

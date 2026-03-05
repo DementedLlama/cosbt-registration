@@ -8,37 +8,7 @@ import { encrypt } from "@/lib/encryption";
 import { generateInvoiceNumber } from "@/lib/invoice";
 import { logAudit, getClientIp } from "@/lib/audit";
 import { sendInvoiceEmail } from "@/lib/email";
-
-// ─── Rate Limiter (in-memory, per-IP) ────────────────────────────────────────
-
-const RATE_LIMIT_WINDOW_MS = 60_000; // 1 minute
-const RATE_LIMIT_MAX = 5; // max requests per window
-
-const ipHits = new Map<string, number[]>();
-
-function isRateLimited(ip: string): boolean {
-  const now = Date.now();
-  const hits = ipHits.get(ip) ?? [];
-  // Remove expired entries
-  const recent = hits.filter((t) => now - t < RATE_LIMIT_WINDOW_MS);
-  if (recent.length >= RATE_LIMIT_MAX) {
-    ipHits.set(ip, recent);
-    return true;
-  }
-  recent.push(now);
-  ipHits.set(ip, recent);
-  return false;
-}
-
-// Periodically clean up stale entries to prevent memory leak
-setInterval(() => {
-  const now = Date.now();
-  ipHits.forEach((hits, ip) => {
-    const recent = hits.filter((t: number) => now - t < RATE_LIMIT_WINDOW_MS);
-    if (recent.length === 0) ipHits.delete(ip);
-    else ipHits.set(ip, recent);
-  });
-}, 5 * 60_000); // every 5 minutes
+import { registrationLimiter } from "@/lib/redis";
 
 // ─── Zod Schema ───────────────────────────────────────────────────────────────
 
@@ -303,9 +273,10 @@ function buildInvoiceHtml(params: {
 // ─── Route handlers ───────────────────────────────────────────────────────────
 
 export async function POST(req: NextRequest) {
-  // Rate limit check
+  // Rate limit check (Upstash Redis)
   const clientIp = getClientIp(req);
-  if (isRateLimited(clientIp)) {
+  const { success: withinLimit } = await registrationLimiter.limit(clientIp);
+  if (!withinLimit) {
     return NextResponse.json(
       { error: "Too many requests. Please try again in a minute." },
       { status: 429 }
