@@ -74,7 +74,7 @@ model CampEvent {
 model PricingRubric {
   id                  String    @id @default(cuid())
   campEventId         String    @unique
-  campEvent           CampEvent @relation(fields: [campEventId], references: [id])
+  campEvent           CampEvent @relation(fields: [campEventId], references: [id], onDelete: Cascade)
 
   // Base rates per adult room tier
   singleAdultRate     Decimal   @db.Decimal(10, 2)
@@ -111,14 +111,13 @@ model User {
 
   auditLogs    AuditLog[]
 
-  @@index([email])
 }
 
 /// One Registration = one Room-In-Charge submission (may contain multiple Rooms)
 model Registration {
   id                  String    @id @default(cuid())
   campEventId         String
-  campEvent           CampEvent @relation(fields: [campEventId], references: [id])
+  campEvent           CampEvent @relation(fields: [campEventId], references: [id], onDelete: Restrict)
 
   // Room I/C details
   roomInChargeName    String
@@ -143,9 +142,9 @@ model Registration {
 model Room {
   id             String        @id @default(cuid())
   registrationId String
-  registration   Registration  @relation(fields: [registrationId], references: [id])
+  registration   Registration  @relation(fields: [registrationId], references: [id], onDelete: Cascade)
   campEventId    String
-  campEvent      CampEvent     @relation(fields: [campEventId], references: [id])
+  campEvent      CampEvent     @relation(fields: [campEventId], references: [id], onDelete: Restrict)
 
   /// SINGLE/TWIN/TRIPLE based on adult+student count only (children are add-ons)
   packageType    PackageType
@@ -171,7 +170,7 @@ model Room {
 model Occupant {
   id              String       @id @default(cuid())
   roomId          String
-  room            Room         @relation(fields: [roomId], references: [id])
+  room            Room         @relation(fields: [roomId], references: [id], onDelete: Cascade)
 
   fullName        String
   dateOfBirth     DateTime
@@ -196,7 +195,7 @@ model Occupant {
 model AuditLog {
   id          String   @id @default(cuid())
   userId      String?
-  user        User?    @relation(fields: [userId], references: [id])
+  user        User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
 
   /// e.g. "VIEW_PASSPORT", "UPDATE_PAYMENT", "CREATE_REGISTRATION"
   action      String

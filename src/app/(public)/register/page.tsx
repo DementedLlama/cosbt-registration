@@ -37,7 +37,10 @@ export default async function RegisterPage() {
   }
 
   // Deadline passed
-  const deadlinePassed = event.registrationDeadline < new Date();
+  // End-of-day in SGT (UTC+8) so deadline means "by end of that day"
+  const deadlineDateStr = event.registrationDeadline.toISOString().split("T")[0];
+  const deadlineEndOfDaySGT = new Date(deadlineDateStr + "T23:59:59+08:00");
+  const deadlinePassed = deadlineEndOfDaySGT < new Date();
   if (deadlinePassed) {
     return (
       <div className="max-w-2xl mx-auto px-6 py-20 text-center">

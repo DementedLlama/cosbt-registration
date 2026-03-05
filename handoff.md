@@ -2,11 +2,11 @@
 
 > **Purpose of this file:** This is a living document maintained to guard against context loss (Claude compaction, app freezes, session resets). It is updated before every context handoff. If starting a fresh Claude session, share this file first and ask Claude to continue from where we left off.
 
-**Last updated:** 2026-03-05 (session 6 — complete)
+**Last updated:** 2026-03-05 (session 7 — complete)
 **Git branch:** `main`
-**Last commit:** See bottom of commit table
+**Last commit:** `a0a40b2` — feat: fix architectural issues, add user accounts CRUD and Excel export
 **GitHub repo:** https://github.com/DementedLlama/cosbt-registration (public)
-**Working tree:** Dirty (uncommitted dateOfBirth + transportMode changes)
+**Working tree:** Clean
 **Deployment target:** Vercel + AWS RDS (not yet deployed)
 
 ---
@@ -61,7 +61,8 @@ Commits on `main`:
 | `de99f5e` | fix: resilient date handling in API GET + restore confirm dialog |
 | `2993cf5` | fix: replace window.confirm with inline two-step confirmation on toggle button |
 | `d473b39` | feat: admin pricing + registrations CRUD, security fixes, Room I/C UX |
-| (next)   | feat: add dateOfBirth to occupants, transportMode with pricing |
+| `39a3d1d` | feat: add dateOfBirth to occupants, transportMode with pricing, and CLAUDE.md |
+| `a0a40b2` | feat: fix architectural issues, add user accounts CRUD and Excel export |
 
 **GitHub:** https://github.com/DementedLlama/cosbt-registration (public)
 **Remote:** `origin` → `https://github.com/DementedLlama/cosbt-registration.git`
@@ -77,7 +78,7 @@ Commits on `main`:
 | `src/app/(public)/page.tsx` | ✅ Done | Landing page — shows event name, dates, hotel, opens registration |
 | `src/app/(public)/layout.tsx` | ✅ Done | Minimal public layout |
 | `src/app/(public)/register/page.tsx` | ✅ Done | Server component — fetches active event + pricing (incl. transportRate), passes to wizard |
-| `src/app/(public)/register/confirmation/page.tsx` | ✅ Done | Confirmation page after registration — reads query params |
+| `src/app/(public)/register/confirmation/page.tsx` | ✅ Done | Confirmation page after registration — reads invoice/name/total from query params (email removed for privacy) |
 
 ### Registration wizard
 
@@ -87,8 +88,8 @@ Commits on `main`:
 
 **Wizard step breakdown:**
 - **Step 1 (StepContact):** Room I/C personal details — full name (as in passport), date of birth, nationality (dropdown, Singapore first), passport number (plain text), passport expiry, email, mobile, church, PDPA consent. All validated before advancing. The registrant is designated as Room I/C.
-- **Step 2 (StepOccupants):** Occupant 1 is pre-filled from Step 1 (name, DOB, nationality, passport fields are read-only/greyed out; occupant type, student toggle, and transport remain editable). Occupant 1 cannot be removed. Additional occupants added via OccupantCards (up to 3 adults/students + unlimited children). Each occupant has a Transportation dropdown (Coach / Own transport). PricePanel (sticky, live price estimate — includes coach transport lines). CWB extra bed — max 1 per room enforced in UI.
-- **Step 3 (StepReview):** Summary table with per-occupant rows, extra bed rows, and coach transport rows. Room I/C name derived from `occupants[0].fullName`. Submit button calls `POST /api/registrations`. On success: redirect to `/register/confirmation?invoice=...&name=...&email=...&total=...`.
+- **Step 2 (StepOccupants):** Occupant 1 is pre-filled from Step 1 (name, DOB, nationality, passport fields are read-only/greyed out; occupant type, student toggle, and transport remain editable). Occupant 1 cannot be removed. Additional occupants added via OccupantCards (up to 3 adults/students + unlimited children). OccupantCard field order: Full Name → DOB → Nationality → Passport No. → Passport Expiry → Occupant Type → Student/Bed → Transportation. PricePanel (sticky, live price estimate — includes coach transport lines). CWB extra bed — max 1 per room enforced in UI.
+- **Step 3 (StepReview):** Summary table with per-occupant rows, extra bed rows, and coach transport rows. Room I/C name derived from `occupants[0].fullName`. Submit button calls `POST /api/registrations`. On success: redirect to `/register/confirmation?invoice=...&name=...&total=...` (email removed from URL for privacy).
 
 **Key types in RegistrationWizard.tsx:**
 ```typescript
@@ -137,35 +138,40 @@ type ContactState = {
 
 | File | Status | Notes |
 |---|---|---|
-| `src/app/api/registrations/route.ts` | ✅ Done | Full POST handler (Zod → validate → price → invoice → DB → audit → email). Includes dateOfBirth + transportMode. |
+| `src/app/api/registrations/route.ts` | ✅ Done | Full POST handler (Zod → validate → price → invoice → DB → audit → email). Includes dateOfBirth + transportMode. Rate limited (5 req/min/IP). Invoice retry loop. |
 | `src/app/api/auth/[...nextauth]/route.ts` | ✅ Done | NextAuth handler |
 | `src/app/api/admin/events/route.ts` | ✅ Done | Full GET (list) + POST (create) with Zod date validation, isActive enforcement, audit |
 | `src/app/api/admin/events/[id]/route.ts` | ✅ Done | Full GET (detail) + PUT (update) with Zod date validation, isActive enforcement, audit |
 | `src/app/api/admin/pricing/route.ts` | ✅ Done | GET (?eventId) + POST (upsert) with Zod rate validation incl. transportRate, audit |
 | `src/app/api/admin/registrations/route.ts` | ✅ Done | GET with search, filter (status, eventId), sort, pagination. Queries Room model with registration + event joins |
 | `src/app/api/admin/registrations/[id]/route.ts` | ✅ Done | GET (full detail incl. dateOfBirth + transportMode, passport decrypt for ADMIN+, VIEW_PASSPORT audit) + PUT (payment status + admin notes update) |
-| `src/app/api/admin/users/route.ts` | 🔲 Stub | Returns 501 Not Implemented |
+| `src/app/api/admin/users/route.ts` | ✅ Done | GET (list all users) + POST (create user with Zod validation, bcrypt hash, audit). SUPER_ADMIN only. |
+| `src/app/api/admin/users/[id]/route.ts` | ✅ Done | PUT (update name/role/isActive/password). Self-protection: cannot deactivate own account or change own role. Audit logging. |
+| `src/app/api/admin/registrations/export/route.ts` | ✅ Done | GET — download registrations as Excel (.xlsx). Optional `?eventId` filter. ADMIN+ only. Audit: EXPORT_MANIFEST. |
 
 **POST `/api/registrations` flow:**
-1. Parse JSON body
-2. Zod validation (ContactSchema + OccupantSchema with cross-field refinements, dateOfBirth, transportMode)
-3. Fetch active `CampEvent` (where `isActive = true`)
-4. Check registration deadline not passed
-5. Fetch `PricingRubric` for the event
-6. Determine `PackageType` from adult count
-7. `calculateTotalAmount()` — iterate occupants, apply rates + CWB surcharge + coach transport surcharge
-8. `generateInvoiceNumber()` — SERIALIZABLE Prisma transaction, format `COSBT-YYYY-NNNN`
-9. Encrypt each `passportNumber` with `encrypt()`
-10. Prisma write: create `Registration` → `Room` → `Occupant[]` (incl. dateOfBirth, transportMode) in one transaction
-11. `logAudit()` — best-effort, never blocks
-12. `sendInvoiceEmail()` — best-effort, never blocks (email template includes Transport column)
-13. Return 201 with invoice number
+1. **Rate limit check** — in-memory sliding window, 5 req/min per IP. Returns 429 if exceeded.
+2. Parse JSON body
+3. Zod validation (ContactSchema + OccupantSchema with cross-field refinements, dateOfBirth, transportMode)
+4. Fetch active `CampEvent` (where `isActive = true`)
+5. Check registration deadline not passed
+6. Fetch `PricingRubric` for the event
+7. Determine `PackageType` from adult count
+8. `calculateTotalAmount()` — iterate occupants, apply rates + CWB surcharge + coach transport surcharge
+9. **Retry loop (up to 3 attempts):**
+   a. `generateInvoiceNumber()` — SERIALIZABLE Prisma transaction with retry, format `COSBT-YYYY-NNNN`
+   b. Encrypt each `passportNumber` with `encrypt()`
+   c. Prisma write: create `Registration` → `Room` → `Occupant[]` in one transaction
+   d. If P2002 unique violation on invoiceNumber, regenerate and retry
+10. `logAudit()` — best-effort, never blocks
+11. `sendInvoiceEmail()` — best-effort, never blocks (email template includes Transport column)
+12. Return 201 with invoice number
 
 ### Admin panel pages
 
 | File | Status | Notes |
 |---|---|---|
-| `src/app/admin/layout.tsx` | ✅ Done | Sidebar nav, user info bar, role display, sign-out button |
+| `src/app/admin/layout.tsx` | ✅ Done | Sidebar nav, user info bar, role display, sign-out button. `isActive` guard redirects deactivated users to login. |
 | `src/app/admin/dashboard/page.tsx` | ✅ Done | Summary stat cards with real DB counts (active events, total rooms, unpaid rooms, total revenue) |
 | `src/app/admin/events/page.tsx` | ✅ Done | Full events table: name, dates, hotel, status badge, registrations, pricing, actions |
 | `src/app/admin/events/[id]/page.tsx` | ✅ Done | Edit form (ADMIN+) or read-only detail (VIEW_ONLY), stats bar |
@@ -175,21 +181,23 @@ type ContactState = {
 | `src/app/admin/pricing/page.tsx` | ✅ Done | Events list with pricing status (Configured / Not Set), links to set/edit rates |
 | `src/app/admin/pricing/[eventId]/page.tsx` | ✅ Done | Edit pricing form (ADMIN+) or read-only rate summary (VIEW_ONLY). Includes transport rate section. |
 | `src/components/admin/PricingForm.tsx` | ✅ Done | 10 rate inputs grouped by Adult / Student / Child+Add-on / Transport, dollar prefix, decimal validation |
-| `src/app/admin/registrations/page.tsx` | ✅ Done | Table with search, payment filter, event filter, pagination. Columns: invoice, Room I/C, event, package, pax, total, status, date |
+| `src/app/admin/registrations/page.tsx` | ✅ Done | Table with search, payment filter, event filter, pagination, Excel export button. Columns: invoice, Room I/C, event, package, pax, total, status, date |
 | `src/app/admin/registrations/[id]/page.tsx` | ✅ Done | Full detail: summary cards, Room I/C info, occupant cards (DOB, nationality, passport, bed type, transport) with decrypted passports (ADMIN+) or masked (VIEW_ONLY), payment update form |
 | `src/components/admin/RegistrationFilters.tsx` | ✅ Done | Client component: search bar + status dropdown + event dropdown + clear filters |
 | `src/components/admin/PaymentStatusForm.tsx` | ✅ Done | Payment status select + admin notes textarea with save/success feedback |
-| `src/app/admin/users/page.tsx` | ✅ Done | Renders real session user; full management UI is next step |
+| `src/components/admin/ExportButton.tsx` | ✅ Done | Client component: fetches export API, creates blob download, extracts filename from Content-Disposition header |
+| `src/app/admin/users/page.tsx` | ✅ Done | Server component: fetches users from DB, serializes dates, renders UserManagement. SUPER_ADMIN only. |
+| `src/components/admin/UserManagement.tsx` | ✅ Done | Full user management UI: users table, create form, inline edit, role dropdown, password reset, activate/deactivate toggle. Self-protection for current user. |
 | `src/app/(admin-public)/admin/login/page.tsx` | ✅ Done | Login form with NextAuth `signIn("credentials")` |
 
 ### Lib utilities
 
 | File | Status | Notes |
 |---|---|---|
-| `src/lib/auth.ts` | ✅ Done | NextAuth config — credentials provider, bcrypt, JWT, `logAudit` on login |
+| `src/lib/auth.ts` | ✅ Done | NextAuth config — credentials provider, bcrypt, JWT, `logAudit` on login. Session callback re-checks `isActive` + syncs `role` from DB on every access. |
 | `src/lib/prisma.ts` | ✅ Done | Singleton Prisma client with HMR-safe global caching |
 | `src/lib/encryption.ts` | ✅ Done | `encrypt()`, `decrypt()`, `isEncrypted()` — AES-256-GCM |
-| `src/lib/invoice.ts` | ✅ Done | `generateInvoiceNumber()` — SERIALIZABLE tx, `COSBT-YYYY-NNNN` |
+| `src/lib/invoice.ts` | ✅ Done | `generateInvoiceNumber()` — SERIALIZABLE tx with retry loop (3 attempts), `COSBT-YYYY-NNNN` |
 | `src/lib/audit.ts` | ✅ Done | `logAudit()` — best-effort, never throws, `getClientIp()` |
 | `src/lib/email.ts` | ✅ Done | `sendEmail()` via AWS SES, `sendInvoiceEmail()` wrapper |
 | `src/lib/s3.ts` | ✅ Done | `uploadFile()`, `getFileUrl()`, `deleteFile()` — graceful skip |
@@ -256,15 +264,15 @@ AuditLog         id, userId(nullable), action, targetTable, targetId, ipAddress,
 
 ---
 
-## Known Architectural Concerns (not yet fixed — require design decisions)
+## Known Architectural Concerns (all fixed in session 7)
 
-1. **Invoice race condition** — `generateInvoiceNumber()` uses SERIALIZABLE transaction for the SELECT but the INSERT happens outside the transaction. Two simultaneous submissions can receive the same invoice number; the `@unique` constraint is the only guard, causing a 500 for the second user. *Recommended fix: add a retry loop.*
+1. **~~Invoice race condition~~** ✅ Fixed — Added retry loop (3 attempts) in `generateInvoiceNumber()` for serialization failures and P2002 unique violations. Registration route also retries the full invoice-generation + DB-write block on conflict.
 
-2. **Deactivated users stay logged in** — JWT is issued for 8 hours and the session callback does not re-query the DB. If an admin deactivates a user, they remain logged in until token expiry. *Recommended fix: DB lookup in session callback, or reduce token lifetime.*
+2. **~~Deactivated users stay logged in~~** ✅ Fixed — Session callback in `src/lib/auth.ts` now re-queries DB on every access (`findUnique` with `select: { isActive, role }`). If user is deactivated, `session.user.isActive` is set to `false`. Admin layout redirects deactivated users to login. All admin API routes check `session.user.isActive`.
 
-3. **No rate limiting on `POST /api/registrations`** — public endpoint, no protection against spam or abuse. *Recommended fix: Vercel Edge rate limiting or `@upstash/ratelimit`.*
+3. **~~No rate limiting~~** ✅ Fixed — In-memory sliding window rate limiter on `POST /api/registrations` (5 requests per IP per minute). Returns 429 Too Many Requests when exceeded. Periodic cleanup of stale entries.
 
-4. **Email in confirmation URL** — `?email=abc@example.com` is visible in browser history and server logs. Low severity. *Recommended fix: server-side session or encrypted token.*
+4. **~~Email in confirmation URL~~** ✅ Fixed — Removed `email` query param from confirmation redirect. Confirmation page now shows generic "the email address you provided" text instead.
 
 ---
 
@@ -299,29 +307,27 @@ AuditLog         id, userId(nullable), action, targetTable, targetId, ipAddress,
 - UX: Passport number input changed to plain text (no masking), NRIC references removed throughout (session 5)
 - Backend: `dateOfBirth` (DateTime) added to Occupant model, Zod schema, DB write, admin detail API + page (session 6)
 - Feature: Transportation mode per occupant — `TransportMode` enum (COACH / OWN_TRANSPORT), `transportRate` on PricingRubric, dropdown in wizard, coach fee in price calculation, Transport column in email template, transport shown in admin detail (session 6)
+- CLAUDE.md created for project-level Claude Code instructions (session 7)
+- Fix: Invoice race condition — retry loops in `invoice.ts` + registration route (session 7)
+- Fix: Deactivated users — DB re-check in session callback, `isActive` guards in layout + all admin API routes (session 7)
+- Fix: Rate limiting — in-memory sliding window on `POST /api/registrations`, 5 req/min/IP (session 7)
+- Fix: Email removed from confirmation URL query params (session 7)
+- Admin: User Accounts CRUD — full API (GET/POST/PUT) + management UI with create, edit, activate/deactivate (session 7)
+- Admin: Excel Export — ExcelJS-based .xlsx download with event filter, ADMIN+ role gate, audit logging (session 7)
+- UX: OccupantCard field reorder — Occupant Type and Transportation moved below Passport Expiry (session 7)
 
-### 🔲 Next to Build (suggested order)
+### ✅ All planned features are complete
 
-1. ~~**Admin: Camp Events CRUD**~~ ✅ Done (session 2)
+All items from the original roadmap have been implemented. The app is feature-complete for initial deployment.
 
-2. ~~**Admin: Pricing configuration**~~ ✅ Done (session 3)
+### Potential future enhancements (not yet planned)
 
-3. ~~**Admin: Registrations list**~~ ✅ Done (session 3)
-
-4. ~~**Admin: Registration detail view**~~ ✅ Done (session 3)
-
-5. ~~**Backend: Add `dateOfBirth` to Prisma schema + API**~~ ✅ Done (session 6)
-
-6. ~~**Feature: Transportation mode with pricing**~~ ✅ Done (session 6)
-
-7. **Admin: User Accounts** — `src/app/api/admin/users/route.ts` + `src/app/admin/users/page.tsx`
-   - SUPER_ADMIN only
-   - Create user, deactivate/reactivate, reset password
-   - List all users with role and last login
-
-8. ~~**Admin: Dashboard data**~~ ✅ Done (already wired up with real DB counts)
-
-9. **Admin: Export** — download registrations as Excel/CSV
+- Vercel deployment + AWS RDS setup
+- Production rate limiting (e.g., Upstash Redis) to replace in-memory limiter
+- Email verification for registrants
+- Bulk payment status update in admin
+- Registration cancellation flow
+- Dashboard charts/analytics
 
 ---
 

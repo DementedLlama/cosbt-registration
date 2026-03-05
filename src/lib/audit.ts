@@ -53,13 +53,29 @@ export async function logAudit(params: AuditParams): Promise<void> {
 }
 
 /**
- * Extract client IP from a Next.js Request (or headers object).
- * Respects X-Forwarded-For for reverse-proxied environments.
+ * Extract client IP from a Next.js Request.
+ *
+ * Priority:
+ * 1. x-vercel-forwarded-for — set by Vercel infrastructure, cannot be spoofed
+ * 2. x-forwarded-for — first value (client IP when behind a single proxy)
+ * 3. x-real-ip — fallback for some reverse proxies (e.g. nginx)
+ * 4. "unknown" — no IP could be determined
  */
-export function getClientIp(request: Request): string | null {
+export function getClientIp(request: Request): string {
+  const vercelForwarded = request.headers.get("x-vercel-forwarded-for");
+  if (vercelForwarded) {
+    return vercelForwarded.split(",")[0].trim();
+  }
+
   const forwarded = request.headers.get("x-forwarded-for");
   if (forwarded) {
     return forwarded.split(",")[0].trim();
   }
-  return null;
+
+  const realIp = request.headers.get("x-real-ip");
+  if (realIp) {
+    return realIp.trim();
+  }
+
+  return "unknown";
 }

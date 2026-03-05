@@ -304,7 +304,7 @@ function buildInvoiceHtml(params: {
 
 export async function POST(req: NextRequest) {
   // Rate limit check
-  const clientIp = getClientIp(req) ?? "unknown";
+  const clientIp = getClientIp(req);
   if (isRateLimited(clientIp)) {
     return NextResponse.json(
       { error: "Too many requests. Please try again in a minute." },
@@ -382,8 +382,10 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // 4. Check registration deadline
-  if (event.registrationDeadline < new Date()) {
+  // 4. Check registration deadline (end-of-day in SGT, UTC+8)
+  const deadlineDateStr = event.registrationDeadline.toISOString().split("T")[0];
+  const deadlineEndOfDaySGT = new Date(deadlineDateStr + "T23:59:59+08:00");
+  if (deadlineEndOfDaySGT < new Date()) {
     return NextResponse.json(
       { error: "Registration has closed for this event." },
       { status: 403 }

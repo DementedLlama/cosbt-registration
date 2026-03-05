@@ -2,8 +2,7 @@
  * /api/admin/events — list / create camp events (admin only)
  */
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import { requireAdminSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { logAudit, getClientIp } from "@/lib/audit";
 import { z } from "zod";
@@ -43,10 +42,8 @@ const CreateEventSchema = z
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 export async function GET(_req: NextRequest) {
-  const session = await getServerSession(authOptions);
-  if (!session || !session.user.isActive) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const result = await requireAdminSession();
+  if (result instanceof NextResponse) return result;
 
   try {
     const events = await prisma.campEvent.findMany({
@@ -88,11 +85,10 @@ export async function GET(_req: NextRequest) {
 // ─── POST — create a new camp event ──────────────────────────────────────────
 
 export async function POST(req: NextRequest) {
-  const session = await getServerSession(authOptions);
-  if (!session || !session.user.isActive) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-  if (session.user.role === "VIEW_ONLY") {
+  const result = await requireAdminSession();
+  if (result instanceof NextResponse) return result;
+  const session = result;
+  if (!["ADMIN", "SUPER_ADMIN"].includes(session.user.role)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 

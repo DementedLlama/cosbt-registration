@@ -4,18 +4,16 @@
  * Requires ADMIN or SUPER_ADMIN role.
  */
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import { requireAdminSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { logAudit, getClientIp } from "@/lib/audit";
 import ExcelJS from "exceljs";
 
 export async function GET(req: NextRequest) {
-  const session = await getServerSession(authOptions);
-  if (!session || !session.user.isActive) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-  if (session.user.role === "VIEW_ONLY") {
+  const result = await requireAdminSession();
+  if (result instanceof NextResponse) return result;
+  const session = result;
+  if (!["ADMIN", "SUPER_ADMIN"].includes(session.user.role)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
@@ -25,9 +23,27 @@ export async function GET(req: NextRequest) {
     where: eventId ? { campEventId: eventId } : {},
     orderBy: { createdAt: "desc" },
     include: {
-      registration: true,
+      registration: {
+        select: {
+          roomInChargeName: true,
+          roomInChargeEmail: true,
+          roomInChargeMobile: true,
+          roomInChargeChurch: true,
+        },
+      },
       campEvent: { select: { name: true } },
-      occupants: { orderBy: { createdAt: "asc" } },
+      occupants: {
+        orderBy: { createdAt: "asc" },
+        select: {
+          fullName: true,
+          dateOfBirth: true,
+          nationality: true,
+          occupantType: true,
+          isStudent: true,
+          bedType: true,
+          transportMode: true,
+        },
+      },
     },
   });
 

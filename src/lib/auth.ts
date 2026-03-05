@@ -1,8 +1,42 @@
-import { NextAuthOptions } from "next-auth";
+import { NextAuthOptions, getServerSession, Session } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
+import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { prisma } from "./prisma";
 import { logAudit } from "./audit";
+
+// ─── Login Rate Limiter (in-memory, per-email) ──────────────────────────────
+const LOGIN_RATE_WINDOW_MS = 15 * 60_000; // 15 minutes
+const LOGIN_MAX_ATTEMPTS = 5;
+
+const loginAttempts = new Map<string, { count: number; firstAttempt: number }>();
+
+// Periodic cleanup to prevent memory leak
+setInterval(() => {
+  const now = Date.now();
+  loginAttempts.forEach((attempt, email) => {
+    if (now - attempt.firstAttempt > LOGIN_RATE_WINDOW_MS) {
+      loginAttempts.delete(email);
+    }
+  });
+}, 5 * 60_000);
+
+function isLoginRateLimited(email: string): boolean {
+  const now = Date.now();
+  const attempt = loginAttempts.get(email);
+
+  if (!attempt || now - attempt.firstAttempt > LOGIN_RATE_WINDOW_MS) {
+    loginAttempts.set(email, { count: 1, firstAttempt: now });
+    return false;
+  }
+
+  if (attempt.count >= LOGIN_MAX_ATTEMPTS) {
+    return true;
+  }
+
+  attempt.count++;
+  return false;
+}
 
 export const authOptions: NextAuthOptions = {
   session: {
@@ -28,8 +62,15 @@ export const authOptions: NextAuthOptions = {
           return null;
         }
 
+        const normalizedEmail = credentials.email.toLowerCase().trim();
+
+        // Rate limit: 5 failed attempts per email per 15 minutes
+        if (isLoginRateLimited(normalizedEmail)) {
+          return null;
+        }
+
         const user = await prisma.user.findUnique({
-          where: { email: credentials.email },
+          where: { email: normalizedEmail },
           select: {
             id: true,
             name: true,
@@ -51,6 +92,9 @@ export const authOptions: NextAuthOptions = {
         if (!isValid) {
           return null;
         }
+
+        // Successful login — clear rate limit counter
+        loginAttempts.delete(normalizedEmail);
 
         // Record last login (fire-and-forget)
         prisma.user
@@ -92,6 +136,9 @@ export const authOptions: NextAuthOptions = {
     async session({ session, token }) {
       if (session.user) {
         // Re-check DB on every session access to catch deactivated users mid-session.
+        // Note: NextAuth v4 JWT strategy does not support programmatic sign-out from
+        // the session callback. We set isActive=false and every route/layout checks it.
+        // The JWT expires after maxAge (8h), but every getServerSession() re-checks DB.
         const dbUser = await prisma.user.findUnique({
           where: { id: token.id as string },
           select: { isActive: true, role: true },
@@ -112,3 +159,15 @@ export const authOptions: NextAuthOptions = {
     },
   },
 };
+
+/**
+ * Require an active admin session for API route handlers.
+ * Returns the session on success, or a 401 NextResponse on failure.
+ */
+export async function requireAdminSession(): Promise<Session | NextResponse> {
+  const session = await getServerSession(authOptions);
+  if (!session || !session.user.isActive) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  return session;
+}

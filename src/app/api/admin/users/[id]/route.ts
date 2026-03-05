@@ -2,8 +2,7 @@
  * /api/admin/users/[id] — update / deactivate a user (SUPER_ADMIN only)
  */
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import { requireAdminSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { logAudit, getClientIp } from "@/lib/audit";
 import bcrypt from "bcryptjs";
@@ -21,8 +20,10 @@ export async function PUT(
   req: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  const session = await getServerSession(authOptions);
-  if (!session || !session.user.isActive || session.user.role !== "SUPER_ADMIN") {
+  const result = await requireAdminSession();
+  if (result instanceof NextResponse) return result;
+  const session = result;
+  if (session.user.role !== "SUPER_ADMIN") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 

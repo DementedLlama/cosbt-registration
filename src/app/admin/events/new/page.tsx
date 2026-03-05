@@ -11,7 +11,7 @@ export default async function NewEventPage() {
     const session = await getServerSession(authOptions);
 
     // Only ADMIN and SUPER_ADMIN can create events
-    if (!session || session.user.role === "VIEW_ONLY") {
+    if (!session || !["ADMIN", "SUPER_ADMIN"].includes(session.user.role)) {
         redirect("/admin/events");
     }
 
