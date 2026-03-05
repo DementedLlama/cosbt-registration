@@ -16,15 +16,10 @@ export default function ToggleActiveButton({
 }: ToggleActiveButtonProps) {
     const router = useRouter();
     const [loading, setLoading] = useState(false);
+    const [confirming, setConfirming] = useState(false);
 
     async function handleToggle() {
         const action = isActive ? "deactivate" : "activate";
-        const confirmed = window.confirm(
-            isActive
-                ? `Deactivate "${currentName}"? Public registration will be disabled until another event is activated.`
-                : `Activate "${currentName}"? This will deactivate any other active event.`
-        );
-        if (!confirmed) return;
 
         setLoading(true);
         try {
@@ -53,6 +48,7 @@ export default function ToggleActiveButton({
                 throw new Error(data.error || `Failed to ${action} event`);
             }
 
+            setConfirming(false);
             router.refresh();
         } catch (err) {
             alert(
@@ -63,9 +59,32 @@ export default function ToggleActiveButton({
         }
     }
 
+    // Two-step inline confirmation to avoid native dialog auto-dismiss issues
+    if (confirming) {
+        return (
+            <span className="inline-flex items-center gap-1">
+                <span className="text-xs text-gray-600">Sure?</span>
+                <button
+                    onClick={handleToggle}
+                    disabled={loading}
+                    className="text-xs font-medium px-2 py-1 rounded-md bg-red-100 text-red-700 hover:bg-red-200 transition-colors disabled:opacity-50"
+                >
+                    {loading ? "…" : "Yes"}
+                </button>
+                <button
+                    onClick={() => setConfirming(false)}
+                    disabled={loading}
+                    className="text-xs font-medium px-2 py-1 rounded-md bg-gray-100 text-gray-600 hover:bg-gray-200 transition-colors disabled:opacity-50"
+                >
+                    No
+                </button>
+            </span>
+        );
+    }
+
     return (
         <button
-            onClick={handleToggle}
+            onClick={() => setConfirming(true)}
             disabled={loading}
             className={`text-xs font-medium px-2.5 py-1 rounded-md transition-colors disabled:opacity-50 ${isActive
                 ? "bg-amber-100 text-amber-700 hover:bg-amber-200"
