@@ -2,12 +2,12 @@
 
 > **Purpose of this file:** This is a living document maintained to guard against context loss (Claude compaction, app freezes, session resets). It is updated before every context handoff. If starting a fresh Claude session, share this file first and ask Claude to continue from where we left off.
 
-**Last updated:** 2026-02-28 (end of session 1)
+**Last updated:** 2026-03-05 (end of session 2)
 **Git branch:** `main`
-**Last commit:** `28c8ab8` — docs: add handoff.md for session continuity and context recovery
+**Last commit:** `44f6c75` — feat: admin camp events CRUD — list, create, edit, toggle active
 **GitHub repo:** https://github.com/DementedLlama/cosbt-registration (public)
 **Working tree:** Clean (nothing uncommitted)
-**Deployment target:** Vercel + AWS RDS (not yet deployed — next step)
+**Deployment target:** Vercel + AWS RDS (not yet deployed)
 
 ---
 
@@ -43,13 +43,15 @@
 
 ## Repository State
 
-Three commits on `main`:
+Commits on `main`:
 
 | Commit | Message |
 |---|---|
 | `fdbcb35` | Initial commit from Create Next App |
 | `ef3f2df` | feat: COSBT Camp Hotel Registration — initial working build |
 | `28c8ab8` | docs: add handoff.md for session continuity and context recovery |
+| `5f1ad2e` | (intermediate, if any) |
+| `44f6c75` | feat: admin camp events CRUD — list, create, edit, toggle active |
 
 **GitHub:** https://github.com/DementedLlama/cosbt-registration (public, pushed ✅)
 **Remote:** `origin` → `https://github.com/DementedLlama/cosbt-registration.git`
@@ -105,7 +107,8 @@ type OccupantInput = {
 |---|---|---|
 | `src/app/api/registrations/route.ts` | ✅ Done | Full POST handler (Zod → validate → price → invoice → DB → audit → email) |
 | `src/app/api/auth/[...nextauth]/route.ts` | ✅ Done | NextAuth handler |
-| `src/app/api/admin/events/route.ts` | 🔲 Stub | Returns 501 Not Implemented |
+| `src/app/api/admin/events/route.ts` | ✅ Done | Full GET (list) + POST (create) with Zod date validation, isActive enforcement, audit |
+| `src/app/api/admin/events/[id]/route.ts` | ✅ Done | Full GET (detail) + PUT (update) with Zod date validation, isActive enforcement, audit |
 | `src/app/api/admin/pricing/route.ts` | 🔲 Stub | Returns 501 Not Implemented |
 | `src/app/api/admin/registrations/route.ts` | 🔲 Stub | Returns 501 Not Implemented |
 | `src/app/api/admin/users/route.ts` | 🔲 Stub | Returns 501 Not Implemented |
@@ -131,8 +134,11 @@ type OccupantInput = {
 |---|---|---|
 | `src/app/admin/layout.tsx` | ✅ Done | Sidebar nav, user info bar, role display, sign-out button |
 | `src/app/admin/dashboard/page.tsx` | ✅ Done | Summary stat cards (hardcoded 0s — data fetch is next step) |
-| `src/app/admin/events/page.tsx` | 🔲 Stub | "Coming Soon" placeholder |
-| `src/app/admin/events/[id]/page.tsx` | 🔲 Stub | "Coming Soon" placeholder |
+| `src/app/admin/events/page.tsx` | ✅ Done | Full events table: name, dates, hotel, status badge, registrations, pricing, actions |
+| `src/app/admin/events/[id]/page.tsx` | ✅ Done | Edit form (ADMIN+) or read-only detail (VIEW_ONLY), stats bar |
+| `src/app/admin/events/new/page.tsx` | ✅ Done | Create event — renders EventForm in create mode |
+| `src/components/admin/EventForm.tsx` | ✅ Done | Reusable create/edit form with client-side validation |
+| `src/components/admin/ToggleActiveButton.tsx` | ✅ Done | Inline activate/deactivate toggle with confirmation |
 | `src/app/admin/pricing/page.tsx` | 🔲 Stub | "Coming Soon" placeholder |
 | `src/app/admin/registrations/page.tsx` | 🔲 Stub | "Coming Soon" placeholder |
 | `src/app/admin/registrations/[id]/page.tsx` | 🔲 Stub | "Coming Soon" placeholder |
@@ -236,9 +242,7 @@ AuditLog         id, userId(nullable), action, targetTable, targetId, metadata(J
 
 ### 🔲 Next to Build (suggested order)
 
-1. **Admin: Camp Events CRUD** — `src/app/api/admin/events/route.ts` + `src/app/admin/events/page.tsx` + `[id]/page.tsx`
-   - List all events, create new event, edit event, toggle `isActive`
-   - Only one event can be `isActive` at a time (enforce in API)
+1. ~~**Admin: Camp Events CRUD**~~ ✅ Done (session 2, commit `44f6c75`)
 
 2. **Admin: Pricing configuration** — `src/app/api/admin/pricing/route.ts` + `src/app/admin/pricing/page.tsx`
    - Set rates for each `PackageType` for a given event
