@@ -7,24 +7,78 @@ import { useRouter } from "next/navigation";
 
 type OccupantType = "ADULT" | "CHILD_PRIMARY" | "CHILD_PRESCHOOL";
 type BedType = "CWB" | "CWOB" | "NOT_APPLICABLE";
+type TransportMode = "COACH" | "OWN_TRANSPORT";
 
 interface OccupantInput {
   _key: string; // local React key only — stripped before API call
   fullName: string;
+  dateOfBirth: string;
   nationality: string;
   passportNumber: string;
   passportExpiry: string;
   occupantType: OccupantType;
   isStudent: boolean;
   bedType: BedType;
+  transportMode: TransportMode;
 }
 
 interface ContactState {
+  fullName: string;
+  dateOfBirth: string;
+  nationality: string;
+  passportNumber: string;
+  passportExpiry: string;
   roomInChargeEmail: string;
   roomInChargeMobile: string;
   roomInChargeChurch: string;
   pdpaConsent: boolean;
 }
+
+// ─── Country List ────────────────────────────────────────────────────────────
+
+const COUNTRIES = [
+  "Singapore",
+  "Afghanistan", "Albania", "Algeria", "Andorra", "Angola",
+  "Antigua and Barbuda", "Argentina", "Armenia", "Australia", "Austria",
+  "Azerbaijan", "Bahamas", "Bahrain", "Bangladesh", "Barbados",
+  "Belarus", "Belgium", "Belize", "Benin", "Bhutan",
+  "Bolivia", "Bosnia and Herzegovina", "Botswana", "Brazil", "Brunei",
+  "Bulgaria", "Burkina Faso", "Burundi", "Cabo Verde", "Cambodia",
+  "Cameroon", "Canada", "Central African Republic", "Chad", "Chile",
+  "China", "Colombia", "Comoros", "Congo (DRC)", "Congo (Republic)",
+  "Costa Rica", "Croatia", "Cuba", "Cyprus", "Czech Republic",
+  "Denmark", "Djibouti", "Dominica", "Dominican Republic", "East Timor",
+  "Ecuador", "Egypt", "El Salvador", "Equatorial Guinea", "Eritrea",
+  "Estonia", "Eswatini", "Ethiopia", "Fiji", "Finland",
+  "France", "Gabon", "Gambia", "Georgia", "Germany",
+  "Ghana", "Greece", "Grenada", "Guatemala", "Guinea",
+  "Guinea-Bissau", "Guyana", "Haiti", "Honduras", "Hungary",
+  "Iceland", "India", "Indonesia", "Iran", "Iraq",
+  "Ireland", "Israel", "Italy", "Ivory Coast", "Jamaica",
+  "Japan", "Jordan", "Kazakhstan", "Kenya", "Kiribati",
+  "Kuwait", "Kyrgyzstan", "Laos", "Latvia", "Lebanon",
+  "Lesotho", "Liberia", "Libya", "Liechtenstein", "Lithuania",
+  "Luxembourg", "Madagascar", "Malawi", "Malaysia", "Maldives",
+  "Mali", "Malta", "Marshall Islands", "Mauritania", "Mauritius",
+  "Mexico", "Micronesia", "Moldova", "Monaco", "Mongolia",
+  "Montenegro", "Morocco", "Mozambique", "Myanmar", "Namibia",
+  "Nauru", "Nepal", "Netherlands", "New Zealand", "Nicaragua",
+  "Niger", "Nigeria", "North Korea", "North Macedonia", "Norway",
+  "Oman", "Pakistan", "Palau", "Palestine", "Panama",
+  "Papua New Guinea", "Paraguay", "Peru", "Philippines", "Poland",
+  "Portugal", "Qatar", "Romania", "Russia", "Rwanda",
+  "Saint Kitts and Nevis", "Saint Lucia", "Saint Vincent and the Grenadines",
+  "Samoa", "San Marino", "Sao Tome and Principe", "Saudi Arabia", "Senegal",
+  "Serbia", "Seychelles", "Sierra Leone", "Slovakia", "Slovenia",
+  "Solomon Islands", "Somalia", "South Africa", "South Korea", "South Sudan",
+  "Spain", "Sri Lanka", "Sudan", "Suriname", "Sweden",
+  "Switzerland", "Syria", "Taiwan", "Tajikistan", "Tanzania",
+  "Thailand", "Togo", "Tonga", "Trinidad and Tobago", "Tunisia",
+  "Turkey", "Turkmenistan", "Tuvalu", "Uganda", "Ukraine",
+  "United Arab Emirates", "United Kingdom", "United States", "Uruguay", "Uzbekistan",
+  "Vanuatu", "Vatican City", "Venezuela", "Vietnam", "Yemen",
+  "Zambia", "Zimbabwe",
+];
 
 export interface PricingData {
   singleAdultRate: number;
@@ -36,6 +90,7 @@ export interface PricingData {
   childPrimaryRate: number;
   extraBedRate: number;
   preschoolRate: number;
+  transportRate: number;
 }
 
 interface Props {
@@ -50,12 +105,14 @@ function newOccupant(type: OccupantType = "ADULT"): OccupantInput {
   return {
     _key: `occ_${++_keySeq}`,
     fullName: "",
+    dateOfBirth: "",
     nationality: "",
     passportNumber: "",
     passportExpiry: "",
     occupantType: type,
     isStudent: false,
     bedType: type === "ADULT" ? "NOT_APPLICABLE" : "CWOB",
+    transportMode: "COACH",
   };
 }
 
@@ -103,6 +160,7 @@ function calcTotal(
   for (const o of occupants) {
     total += getLineRate(o, pkg, pricing);
     if (o.bedType === "CWB") total += pricing.extraBedRate;
+    if (o.transportMode === "COACH") total += pricing.transportRate;
   }
   return total;
 }
@@ -168,9 +226,22 @@ function StepContact({
   onNext: () => void;
 }) {
   const [errors, setErrors] = useState<ContactErrors>({});
+  const minExpiry = new Date().toISOString().split("T")[0];
 
   function validate(): ContactErrors {
     const e: ContactErrors = {};
+    if (!data.fullName.trim())
+      e.fullName = "Full name is required.";
+    if (!data.dateOfBirth)
+      e.dateOfBirth = "Date of birth is required.";
+    if (!data.nationality)
+      e.nationality = "Nationality is required.";
+    if (!data.passportNumber.trim())
+      e.passportNumber = "Passport number is required.";
+    if (!data.passportExpiry)
+      e.passportExpiry = "Passport expiry date is required.";
+    else if (new Date(data.passportExpiry) <= new Date())
+      e.passportExpiry = "Passport expiry date must be in the future.";
     if (!data.roomInChargeEmail.trim()) {
       e.roomInChargeEmail = "Email is required.";
     } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(data.roomInChargeEmail)) {
@@ -194,14 +265,105 @@ function StepContact({
   return (
     <div>
       <h3 className="text-lg font-semibold text-gray-800 mb-1">
-        Contact Details
+        Your Details
       </h3>
       <p className="text-sm text-gray-500 mb-6">
-        The invoice will be emailed to you after submission. Occupant 1 in the
-        next step will be assigned as the Room In-Charge.
+        You will be the Room In-Charge for this booking. Your details will be
+        pre-filled as Occupant 1 in the next step.
       </p>
 
       <div className="space-y-4">
+        {/* Full Name */}
+        <div>
+          <label className="form-label">
+            Full Name (as in Passport) <span className="text-red-500">*</span>
+          </label>
+          <input
+            type="text"
+            className="form-input"
+            placeholder="e.g. TAN AH KOW"
+            value={data.fullName}
+            onChange={(e) => onChange({ fullName: e.target.value })}
+          />
+          {errors.fullName && (
+            <p className="text-red-500 text-xs mt-1">{errors.fullName}</p>
+          )}
+        </div>
+
+        {/* Date of Birth */}
+        <div>
+          <label className="form-label">
+            Date of Birth <span className="text-red-500">*</span>
+          </label>
+          <input
+            type="date"
+            className="form-input"
+            value={data.dateOfBirth}
+            onChange={(e) => onChange({ dateOfBirth: e.target.value })}
+          />
+          {errors.dateOfBirth && (
+            <p className="text-red-500 text-xs mt-1">{errors.dateOfBirth}</p>
+          )}
+        </div>
+
+        {/* Nationality */}
+        <div>
+          <label className="form-label">
+            Nationality <span className="text-red-500">*</span>
+          </label>
+          <select
+            className="form-input"
+            value={data.nationality}
+            onChange={(e) => onChange({ nationality: e.target.value })}
+          >
+            <option value="">— Select nationality —</option>
+            {COUNTRIES.map((c) => (
+              <option key={c} value={c}>{c}</option>
+            ))}
+          </select>
+          {errors.nationality && (
+            <p className="text-red-500 text-xs mt-1">{errors.nationality}</p>
+          )}
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {/* Passport */}
+          <div>
+            <label className="form-label">
+              Passport No. <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="text"
+              className="form-input"
+              placeholder="Passport number"
+              value={data.passportNumber}
+              onChange={(e) => onChange({ passportNumber: e.target.value })}
+            />
+            {errors.passportNumber && (
+              <p className="text-red-500 text-xs mt-1">{errors.passportNumber}</p>
+            )}
+          </div>
+
+          {/* Passport Expiry */}
+          <div>
+            <label className="form-label">
+              Passport Expiry Date <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="date"
+              className="form-input"
+              min={minExpiry}
+              value={data.passportExpiry}
+              onChange={(e) => onChange({ passportExpiry: e.target.value })}
+            />
+            {errors.passportExpiry && (
+              <p className="text-red-500 text-xs mt-1">{errors.passportExpiry}</p>
+            )}
+          </div>
+        </div>
+
+        <hr className="border-gray-200" />
+
         {/* Email */}
         <div>
           <label className="form-label">
@@ -312,8 +474,9 @@ function OccupantCard({
   onChange: (patch: Partial<OccupantInput>) => void;
   onRemove: () => void;
 }) {
-  const [showPassport, setShowPassport] = useState(false);
   const minExpiry = new Date().toISOString().split("T")[0];
+  // Occupant 1 personal details come from Step 1 — read-only here
+  const personalLocked = isRoomIC;
 
   function handleTypeChange(newType: OccupantType) {
     const patch: Partial<OccupantInput> = { occupantType: newType };
@@ -436,6 +599,28 @@ function OccupantCard({
           </div>
         )}
 
+        {/* Transportation */}
+        <div className="sm:col-span-2">
+          <label className="form-label">
+            Transportation <span className="text-red-500">*</span>
+          </label>
+          <select
+            className="form-input"
+            value={occupant.transportMode}
+            onChange={(e) =>
+              onChange({ transportMode: e.target.value as TransportMode })
+            }
+          >
+            <option value="COACH">Coach — church-arranged transport</option>
+            <option value="OWN_TRANSPORT">Own transport — self-drive</option>
+          </select>
+          {occupant.transportMode === "COACH" && (
+            <p className="text-xs text-blue-700 mt-1">
+              Coach transport fee will be added to the room total.
+            </p>
+          )}
+        </div>
+
         {/* Full Name */}
         <div>
           <label className="form-label">
@@ -443,10 +628,28 @@ function OccupantCard({
           </label>
           <input
             type="text"
-            className="form-input"
-            placeholder="As per passport / NRIC"
+            className={`form-input ${personalLocked ? "bg-gray-100 text-gray-500" : ""}`}
+            placeholder="As per passport"
             value={occupant.fullName}
             onChange={(e) => onChange({ fullName: e.target.value })}
+            disabled={personalLocked}
+          />
+          {personalLocked && (
+            <p className="text-xs text-gray-400 mt-1">Pre-filled from Step 1. Go back to edit.</p>
+          )}
+        </div>
+
+        {/* Date of Birth */}
+        <div>
+          <label className="form-label">
+            Date of Birth <span className="text-red-500">*</span>
+          </label>
+          <input
+            type="date"
+            className={`form-input ${personalLocked ? "bg-gray-100 text-gray-500" : ""}`}
+            value={occupant.dateOfBirth}
+            onChange={(e) => onChange({ dateOfBirth: e.target.value })}
+            disabled={personalLocked}
           />
         </div>
 
@@ -455,37 +658,32 @@ function OccupantCard({
           <label className="form-label">
             Nationality <span className="text-red-500">*</span>
           </label>
-          <input
-            type="text"
-            className="form-input"
-            placeholder="e.g. Singaporean"
+          <select
+            className={`form-input ${personalLocked ? "bg-gray-100 text-gray-500" : ""}`}
             value={occupant.nationality}
             onChange={(e) => onChange({ nationality: e.target.value })}
-          />
+            disabled={personalLocked}
+          >
+            <option value="">— Select —</option>
+            {COUNTRIES.map((c) => (
+              <option key={c} value={c}>{c}</option>
+            ))}
+          </select>
         </div>
 
-        {/* Passport / NRIC */}
+        {/* Passport */}
         <div>
           <label className="form-label">
-            Passport / NRIC No. <span className="text-red-500">*</span>
+            Passport No. <span className="text-red-500">*</span>
           </label>
-          <div className="relative">
-            <input
-              type={showPassport ? "text" : "password"}
-              className="form-input pr-14"
-              placeholder="Document number"
-              value={occupant.passportNumber}
-              onChange={(e) => onChange({ passportNumber: e.target.value })}
-              autoComplete="off"
-            />
-            <button
-              type="button"
-              className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-gray-400 hover:text-gray-600 transition-colors"
-              onClick={() => setShowPassport((v) => !v)}
-            >
-              {showPassport ? "Hide" : "Show"}
-            </button>
-          </div>
+          <input
+            type="text"
+            className={`form-input ${personalLocked ? "bg-gray-100 text-gray-500" : ""}`}
+            placeholder="Passport number"
+            value={occupant.passportNumber}
+            onChange={(e) => onChange({ passportNumber: e.target.value })}
+            disabled={personalLocked}
+          />
         </div>
 
         {/* Passport Expiry */}
@@ -495,10 +693,11 @@ function OccupantCard({
           </label>
           <input
             type="date"
-            className="form-input"
+            className={`form-input ${personalLocked ? "bg-gray-100 text-gray-500" : ""}`}
             min={minExpiry}
             value={occupant.passportExpiry}
             onChange={(e) => onChange({ passportExpiry: e.target.value })}
+            disabled={personalLocked}
           />
         </div>
       </div>
@@ -580,6 +779,21 @@ function PricePanel({
                   </span>
                 </div>
               ))}
+
+            {/* Coach transport lines */}
+            {occupants
+              .filter((o) => o.transportMode === "COACH")
+              .map((o) => (
+                <div
+                  key={`transport_${o._key}`}
+                  className="flex justify-between gap-2 text-blue-700"
+                >
+                  <span>Coach transport</span>
+                  <span>
+                    S${pricing ? pricing.transportRate.toFixed(2) : "0.00"}
+                  </span>
+                </div>
+              ))}
           </div>
 
           <div className="mt-3 pt-3 border-t flex justify-between font-bold text-sm">
@@ -639,10 +853,12 @@ function StepOccupants({
     occupants.forEach((o, i) => {
       const n = i + 1;
       if (!o.fullName.trim()) errs.push(`Occupant ${n}: Full name is required.`);
-      if (!o.nationality.trim())
+      if (!o.dateOfBirth)
+        errs.push(`Occupant ${n}: Date of birth is required.`);
+      if (!o.nationality)
         errs.push(`Occupant ${n}: Nationality is required.`);
       if (!o.passportNumber.trim())
-        errs.push(`Occupant ${n}: Passport / NRIC number is required.`);
+        errs.push(`Occupant ${n}: Passport number is required.`);
       if (!o.passportExpiry)
         errs.push(`Occupant ${n}: Passport expiry date is required.`);
       else if (new Date(o.passportExpiry) <= new Date())
@@ -666,9 +882,9 @@ function StepOccupants({
             Room Occupants
           </h3>
           <p className="text-sm text-gray-500 mb-5">
-            Add everyone sharing this room. The room package (Single / Twin /
+            Occupant 1 (Room I/C) has been pre-filled from your details.
+            Add anyone else sharing this room. The room package (Single / Twin /
             Triple) is determined by the number of adults and students.
-            Occupant 1 will be assigned as the Room In-Charge.
           </p>
 
           {occupants.map((occ, idx) => (
@@ -677,7 +893,7 @@ function StepOccupants({
               occupant={occ}
               index={idx}
               isRoomIC={idx === 0}
-              canRemove={occupants.length > 1}
+              canRemove={idx > 0}
               cwbAlreadyTaken={
                 cwbOccupantKey !== undefined && cwbOccupantKey !== occ._key
               }
@@ -914,6 +1130,19 @@ function StepReview({
                   </td>
                 </tr>
               ))}
+            {/* Coach transport rows */}
+            {occupants
+              .filter((o) => o.transportMode === "COACH")
+              .map((o) => (
+                <tr key={`transport_${o._key}`}>
+                  <td className="py-2 text-blue-600 italic" colSpan={2}>
+                    Coach transport — {o.fullName || `Occupant`}
+                  </td>
+                  <td className="py-2 text-right">
+                    S${pricing ? pricing.transportRate.toFixed(2) : "0.00"}
+                  </td>
+                </tr>
+              ))}
           </tbody>
           <tfoot>
             <tr className="border-t">
@@ -967,6 +1196,11 @@ const STEPS = ["Contact Info", "Room Occupants", "Review & Submit"];
 export default function RegistrationWizard({ campEventId, pricing }: Props) {
   const [step, setStep] = useState(1);
   const [contact, setContact] = useState<ContactState>({
+    fullName: "",
+    dateOfBirth: "",
+    nationality: "",
+    passportNumber: "",
+    passportExpiry: "",
     roomInChargeEmail: "",
     roomInChargeMobile: "",
     roomInChargeChurch: "",
@@ -976,6 +1210,23 @@ export default function RegistrationWizard({ campEventId, pricing }: Props) {
     newOccupant("ADULT"),
   ]);
 
+  // Sync contact details into Occupant 1 when advancing from Step 1 → Step 2
+  function handleStep1Next() {
+    setOccupants((prev) => {
+      const updated = [...prev];
+      updated[0] = {
+        ...updated[0],
+        fullName: contact.fullName,
+        dateOfBirth: contact.dateOfBirth,
+        nationality: contact.nationality,
+        passportNumber: contact.passportNumber,
+        passportExpiry: contact.passportExpiry,
+      };
+      return updated;
+    });
+    setStep(2);
+  }
+
   return (
     <div className="card p-6 sm:p-8">
       <StepIndicator current={step} steps={STEPS} />
@@ -984,7 +1235,7 @@ export default function RegistrationWizard({ campEventId, pricing }: Props) {
         <StepContact
           data={contact}
           onChange={(patch) => setContact((c) => ({ ...c, ...patch }))}
-          onNext={() => setStep(2)}
+          onNext={handleStep1Next}
         />
       )}
 

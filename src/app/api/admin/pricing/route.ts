@@ -29,6 +29,7 @@ const PricingSchema = z.object({
   childPrimaryRate: rate,
   extraBedRate: rate,
   preschoolRate: rate,
+  transportRate: rate,
 });
 
 // ─── GET — fetch pricing for a camp event ─────────────────────────────────────

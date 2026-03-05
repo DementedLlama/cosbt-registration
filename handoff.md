@@ -2,11 +2,11 @@
 
 > **Purpose of this file:** This is a living document maintained to guard against context loss (Claude compaction, app freezes, session resets). It is updated before every context handoff. If starting a fresh Claude session, share this file first and ask Claude to continue from where we left off.
 
-**Last updated:** 2026-03-05 (end of session 4)
+**Last updated:** 2026-03-05 (session 6 — complete)
 **Git branch:** `main`
 **Last commit:** See bottom of commit table
 **GitHub repo:** https://github.com/DementedLlama/cosbt-registration (public)
-**Working tree:** Clean
+**Working tree:** Dirty (uncommitted dateOfBirth + transportMode changes)
 **Deployment target:** Vercel + AWS RDS (not yet deployed)
 
 ---
@@ -60,7 +60,8 @@ Commits on `main`:
 | `411a909` | docs: update handoff.md for session 2 |
 | `de99f5e` | fix: resilient date handling in API GET + restore confirm dialog |
 | `2993cf5` | fix: replace window.confirm with inline two-step confirmation on toggle button |
-| (next)   | feat: admin pricing + registrations CRUD, security fixes, Room I/C UX |
+| `d473b39` | feat: admin pricing + registrations CRUD, security fixes, Room I/C UX |
+| (next)   | feat: add dateOfBirth to occupants, transportMode with pricing |
 
 **GitHub:** https://github.com/DementedLlama/cosbt-registration (public)
 **Remote:** `origin` → `https://github.com/DementedLlama/cosbt-registration.git`
@@ -75,67 +76,89 @@ Commits on `main`:
 |---|---|---|
 | `src/app/(public)/page.tsx` | ✅ Done | Landing page — shows event name, dates, hotel, opens registration |
 | `src/app/(public)/layout.tsx` | ✅ Done | Minimal public layout |
-| `src/app/(public)/register/page.tsx` | ✅ Done | Server component — fetches active event + pricing, passes to wizard |
+| `src/app/(public)/register/page.tsx` | ✅ Done | Server component — fetches active event + pricing (incl. transportRate), passes to wizard |
 | `src/app/(public)/register/confirmation/page.tsx` | ✅ Done | Confirmation page after registration — reads query params |
 
 ### Registration wizard
 
 | File | Status | Notes |
 |---|---|---|
-| `src/components/registration/RegistrationWizard.tsx` | ✅ Done | 3-step client component wizard (~1,000 lines) |
+| `src/components/registration/RegistrationWizard.tsx` | ✅ Done | 3-step client component wizard (~1,100 lines) |
 
 **Wizard step breakdown:**
-- **Step 1 (StepContact):** Contact info — email, mobile, church name, PDPA consent checkbox (with full notice text). No name field — Occupant 1 is automatically assigned as Room I/C. Client-side validation before advancing.
-- **Step 2 (StepOccupants):** Dynamic list of OccupantCards (up to 3 adults/students + unlimited children). Occupant 1 shows a "Room I/C" badge. PricePanel (sticky, live price estimate). Add/remove buttons. CWB extra bed — max 1 per room enforced in UI.
-- **Step 3 (StepReview):** Summary table. Room I/C name derived from `occupants[0].fullName`. Submit button calls `POST /api/registrations`. On success: redirect to `/register/confirmation?invoice=...&name=...&email=...&total=...`.
+- **Step 1 (StepContact):** Room I/C personal details — full name (as in passport), date of birth, nationality (dropdown, Singapore first), passport number (plain text), passport expiry, email, mobile, church, PDPA consent. All validated before advancing. The registrant is designated as Room I/C.
+- **Step 2 (StepOccupants):** Occupant 1 is pre-filled from Step 1 (name, DOB, nationality, passport fields are read-only/greyed out; occupant type, student toggle, and transport remain editable). Occupant 1 cannot be removed. Additional occupants added via OccupantCards (up to 3 adults/students + unlimited children). Each occupant has a Transportation dropdown (Coach / Own transport). PricePanel (sticky, live price estimate — includes coach transport lines). CWB extra bed — max 1 per room enforced in UI.
+- **Step 3 (StepReview):** Summary table with per-occupant rows, extra bed rows, and coach transport rows. Room I/C name derived from `occupants[0].fullName`. Submit button calls `POST /api/registrations`. On success: redirect to `/register/confirmation?invoice=...&name=...&email=...&total=...`.
 
 **Key types in RegistrationWizard.tsx:**
 ```typescript
 type OccupantType = "ADULT" | "CHILD_PRIMARY" | "CHILD_PRESCHOOL";
 type BedType = "CWB" | "CWOB" | "NOT_APPLICABLE";
+type TransportMode = "COACH" | "OWN_TRANSPORT";
 type OccupantInput = {
-  _key: number;      // local React key only — stripped before API call
+  _key: string;       // local React key only — stripped before API call
   fullName: string;
-  nationality: string;
+  dateOfBirth: string; // "YYYY-MM-DD"
+  nationality: string; // country name from COUNTRIES dropdown
   passportNumber: string;
   passportExpiry: string;   // "YYYY-MM-DD"
   occupantType: OccupantType;
   isStudent: boolean;       // adults only
   bedType: BedType;         // children only; adults always NOT_APPLICABLE
+  transportMode: TransportMode; // COACH or OWN_TRANSPORT; default COACH
+};
+type ContactState = {
+  fullName: string;
+  dateOfBirth: string;
+  nationality: string;
+  passportNumber: string;
+  passportExpiry: string;
+  roomInChargeEmail: string;
+  roomInChargeMobile: string;
+  roomInChargeChurch: string;
+  pdpaConsent: boolean;
 };
 ```
+
+**Nationality dropdown:** `COUNTRIES` constant — Singapore first, then all countries A–Z. Used in both Step 1 and OccupantCard.
 
 **Package type logic:**
 - Count occupants where `occupantType === "ADULT"` (this includes students, since students are adults with `isStudent: true`)
 - 1 adult → SINGLE, 2 → TWIN, 3 → TRIPLE. Max 3 adults per room.
 - Children never affect package type.
 
+**Price calculation logic:**
+- Base rate per adult/student determined by package type
+- Child (Primary) → `childPrimaryRate`; Child (Preschool) → free (`preschoolRate` = 0)
+- CWB extra bed → `extraBedRate` surcharge (max 1 per room)
+- Coach transport → `transportRate` surcharge per person (only when `transportMode === "COACH"`)
+
 ### API routes
 
 | File | Status | Notes |
 |---|---|---|
-| `src/app/api/registrations/route.ts` | ✅ Done | Full POST handler (Zod → validate → price → invoice → DB → audit → email) |
+| `src/app/api/registrations/route.ts` | ✅ Done | Full POST handler (Zod → validate → price → invoice → DB → audit → email). Includes dateOfBirth + transportMode. |
 | `src/app/api/auth/[...nextauth]/route.ts` | ✅ Done | NextAuth handler |
 | `src/app/api/admin/events/route.ts` | ✅ Done | Full GET (list) + POST (create) with Zod date validation, isActive enforcement, audit |
 | `src/app/api/admin/events/[id]/route.ts` | ✅ Done | Full GET (detail) + PUT (update) with Zod date validation, isActive enforcement, audit |
-| `src/app/api/admin/pricing/route.ts` | ✅ Done | GET (?eventId) + POST (upsert) with Zod rate validation, audit (CREATE_PRICING / UPDATE_PRICING) |
+| `src/app/api/admin/pricing/route.ts` | ✅ Done | GET (?eventId) + POST (upsert) with Zod rate validation incl. transportRate, audit |
 | `src/app/api/admin/registrations/route.ts` | ✅ Done | GET with search, filter (status, eventId), sort, pagination. Queries Room model with registration + event joins |
-| `src/app/api/admin/registrations/[id]/route.ts` | ✅ Done | GET (full detail, passport decrypt for ADMIN+, VIEW_PASSPORT audit) + PUT (payment status + admin notes update) |
+| `src/app/api/admin/registrations/[id]/route.ts` | ✅ Done | GET (full detail incl. dateOfBirth + transportMode, passport decrypt for ADMIN+, VIEW_PASSPORT audit) + PUT (payment status + admin notes update) |
 | `src/app/api/admin/users/route.ts` | 🔲 Stub | Returns 501 Not Implemented |
 
 **POST `/api/registrations` flow:**
 1. Parse JSON body
-2. Zod validation (ContactSchema + OccupantSchema with cross-field refinements)
+2. Zod validation (ContactSchema + OccupantSchema with cross-field refinements, dateOfBirth, transportMode)
 3. Fetch active `CampEvent` (where `isActive = true`)
 4. Check registration deadline not passed
 5. Fetch `PricingRubric` for the event
 6. Determine `PackageType` from adult count
-7. `calculateTotalAmount()` — iterate occupants, apply rates + CWB surcharge
+7. `calculateTotalAmount()` — iterate occupants, apply rates + CWB surcharge + coach transport surcharge
 8. `generateInvoiceNumber()` — SERIALIZABLE Prisma transaction, format `COSBT-YYYY-NNNN`
 9. Encrypt each `passportNumber` with `encrypt()`
-10. Prisma write: create `Registration` → `Room` → `Occupant[]` in one transaction
+10. Prisma write: create `Registration` → `Room` → `Occupant[]` (incl. dateOfBirth, transportMode) in one transaction
 11. `logAudit()` — best-effort, never blocks
-12. `sendInvoiceEmail()` — best-effort, never blocks
+12. `sendInvoiceEmail()` — best-effort, never blocks (email template includes Transport column)
 13. Return 201 with invoice number
 
 ### Admin panel pages
@@ -150,10 +173,10 @@ type OccupantInput = {
 | `src/components/admin/EventForm.tsx` | ✅ Done | Reusable create/edit form with client-side validation |
 | `src/components/admin/ToggleActiveButton.tsx` | ✅ Done | Inline activate/deactivate toggle with confirmation |
 | `src/app/admin/pricing/page.tsx` | ✅ Done | Events list with pricing status (Configured / Not Set), links to set/edit rates |
-| `src/app/admin/pricing/[eventId]/page.tsx` | ✅ Done | Edit pricing form (ADMIN+) or read-only rate summary (VIEW_ONLY) |
-| `src/components/admin/PricingForm.tsx` | ✅ Done | 9 rate inputs grouped by Adult / Student / Child+Add-on, dollar prefix, decimal validation |
+| `src/app/admin/pricing/[eventId]/page.tsx` | ✅ Done | Edit pricing form (ADMIN+) or read-only rate summary (VIEW_ONLY). Includes transport rate section. |
+| `src/components/admin/PricingForm.tsx` | ✅ Done | 10 rate inputs grouped by Adult / Student / Child+Add-on / Transport, dollar prefix, decimal validation |
 | `src/app/admin/registrations/page.tsx` | ✅ Done | Table with search, payment filter, event filter, pagination. Columns: invoice, Room I/C, event, package, pax, total, status, date |
-| `src/app/admin/registrations/[id]/page.tsx` | ✅ Done | Full detail: summary cards, Room I/C info, occupant cards with decrypted passports (ADMIN+) or masked (VIEW_ONLY), payment update form |
+| `src/app/admin/registrations/[id]/page.tsx` | ✅ Done | Full detail: summary cards, Room I/C info, occupant cards (DOB, nationality, passport, bed type, transport) with decrypted passports (ADMIN+) or masked (VIEW_ONLY), payment update form |
 | `src/components/admin/RegistrationFilters.tsx` | ✅ Done | Client component: search bar + status dropdown + event dropdown + clear filters |
 | `src/components/admin/PaymentStatusForm.tsx` | ✅ Done | Payment status select + admin notes textarea with save/success feedback |
 | `src/app/admin/users/page.tsx` | ✅ Done | Renders real session user; full management UI is next step |
@@ -176,7 +199,7 @@ type OccupantInput = {
 | File | Status | Notes |
 |---|---|---|
 | `prisma/schema.prisma` | ✅ Done | Full schema — see models below |
-| `prisma/seed.ts` | ✅ Done | Creates `admin@cosbt.org.sg` / `changeme123` as SUPER_ADMIN |
+| `prisma/seed.ts` | ✅ Done | Creates `admin@cosbt.org.sg` / `ChangeMe@123!` as SUPER_ADMIN |
 | `prisma.config.ts` | ✅ Done | Prisma 7 driver-adapter config pointing to `src/generated/prisma` |
 | `src/middleware.ts` | ✅ Done | `withAuth` — protects `/admin/((?!login).*)`, SUPER_ADMIN gate on `/admin/users` |
 | `src/types/next-auth.d.ts` | ✅ Done | Extends `Session.user` with `id`, `role`, `isActive` |
@@ -194,21 +217,23 @@ type OccupantInput = {
 CampEvent        id, name, startDate, endDate, venue, hotelName, registrationDeadline, isActive, description
 PricingRubric    id, campEventId(@unique), singleAdultRate, twinAdultRate, tripleAdultRate,
                  singleStudentRate, twinStudentRate, tripleStudentRate,
-                 childPrimaryRate, extraBedRate, preschoolRate
+                 childPrimaryRate, extraBedRate, preschoolRate, transportRate
 Registration     id, campEventId, roomInChargeName/Email/Mobile/Church,
                  pdpaConsent, pdpaConsentAt
 Room             id, registrationId, campEventId, packageType(SINGLE/TWIN/TRIPLE),
                  invoiceNumber(@unique, COSBT-YYYY-NNNN), paymentStatus(UNPAID/PAID/PARTIAL),
                  adminNotes, totalAmount
-Occupant         id, roomId, fullName, nationality, passportNumber(AES-256-GCM ciphertext),
-                 passportExpiry, occupantType(ADULT/CHILD_PRIMARY/CHILD_PRESCHOOL),
-                 isStudent, bedType(CWB/CWOB/NOT_APPLICABLE)
+Occupant         id, roomId, fullName, dateOfBirth, nationality,
+                 passportNumber(AES-256-GCM ciphertext), passportExpiry,
+                 occupantType(ADULT/CHILD_PRIMARY/CHILD_PRESCHOOL),
+                 isStudent, bedType(CWB/CWOB/NOT_APPLICABLE),
+                 transportMode(COACH/OWN_TRANSPORT)
 User             id, email(@unique), name, role(SUPER_ADMIN/ADMIN/VIEW_ONLY), isActive,
                  passwordHash, lastLoginAt
 AuditLog         id, userId(nullable), action, targetTable, targetId, ipAddress, createdAt
 ```
 
-**Enums:** `UserRole`, `PackageType`, `PaymentStatus`, `OccupantType`, `BedType`
+**Enums:** `UserRole`, `PackageType`, `PaymentStatus`, `OccupantType`, `BedType`, `TransportMode`
 
 ---
 
@@ -268,6 +293,12 @@ AuditLog         id, userId(nullable), action, targetTable, targetId, ipAddress,
 - Admin: Registration detail — full room + occupant view, passport decryption for ADMIN+, payment status + admin notes update (session 3)
 - Security audit: XSS fix in email template, dead code removal, unbounded input capping (session 3/4)
 - UX: Room I/C derived from Occupant 1 — removed redundant name field from Step 1 (session 4)
+- UX: Step 1 now collects Room I/C personal details (name, DOB, nationality, passport) — pre-fills Occupant 1 in Step 2 as read-only (session 5)
+- UX: Nationality changed from free text to dropdown (Singapore first, then A–Z countries) (session 5)
+- UX: Date of Birth added as required field for all participants (session 5)
+- UX: Passport number input changed to plain text (no masking), NRIC references removed throughout (session 5)
+- Backend: `dateOfBirth` (DateTime) added to Occupant model, Zod schema, DB write, admin detail API + page (session 6)
+- Feature: Transportation mode per occupant — `TransportMode` enum (COACH / OWN_TRANSPORT), `transportRate` on PricingRubric, dropdown in wizard, coach fee in price calculation, Transport column in email template, transport shown in admin detail (session 6)
 
 ### 🔲 Next to Build (suggested order)
 
@@ -279,14 +310,18 @@ AuditLog         id, userId(nullable), action, targetTable, targetId, ipAddress,
 
 4. ~~**Admin: Registration detail view**~~ ✅ Done (session 3)
 
-5. **Admin: User Accounts** — `src/app/api/admin/users/route.ts` + `src/app/admin/users/page.tsx`
+5. ~~**Backend: Add `dateOfBirth` to Prisma schema + API**~~ ✅ Done (session 6)
+
+6. ~~**Feature: Transportation mode with pricing**~~ ✅ Done (session 6)
+
+7. **Admin: User Accounts** — `src/app/api/admin/users/route.ts` + `src/app/admin/users/page.tsx`
    - SUPER_ADMIN only
    - Create user, deactivate/reactivate, reset password
    - List all users with role and last login
 
-6. ~~**Admin: Dashboard data**~~ ✅ Done (already wired up with real DB counts)
+8. ~~**Admin: Dashboard data**~~ ✅ Done (already wired up with real DB counts)
 
-7. **Admin: Export** — download registrations as Excel/CSV
+9. **Admin: Export** — download registrations as Excel/CSV
 
 ---
 
@@ -316,11 +351,11 @@ cp .env.example .env.local
 
 # 4. Push schema and seed DB
 npx prisma db push
-npx prisma db seed
+DATABASE_URL="postgresql://cosbt:cosbt@localhost:5432/cosbt_camp" npx tsx prisma/seed.ts
 
 # 5. Start dev server
 npm run dev
 # → http://localhost:3000        (public registration)
 # → http://localhost:3000/admin  (admin panel)
-# Default login: admin@cosbt.org.sg / changeme123
+# Default login: admin@cosbt.org.sg / ChangeMe@123!
 ```

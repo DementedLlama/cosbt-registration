@@ -61,12 +61,14 @@ export async function GET(
       return {
         id: occ.id,
         fullName: occ.fullName,
+        dateOfBirth: occ.dateOfBirth.toISOString().split("T")[0],
         nationality: occ.nationality,
         passportNumber: passportDisplay,
         passportExpiry: occ.passportExpiry.toISOString().split("T")[0],
         occupantType: occ.occupantType,
         isStudent: occ.isStudent,
         bedType: occ.bedType,
+        transportMode: occ.transportMode,
       };
     });
 

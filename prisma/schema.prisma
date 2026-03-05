@@ -43,6 +43,12 @@ enum BedType {
   NOT_APPLICABLE
 }
 
+/// COACH = church-arranged coach transport | OWN_TRANSPORT = self-drive / own arrangement
+enum TransportMode {
+  COACH
+  OWN_TRANSPORT
+}
+
 // ─── Models ───────────────────────────────────────────────────────────────────
 
 /// A camp event (one active at a time — enforced at application level)
@@ -84,6 +90,9 @@ model PricingRubric {
   childPrimaryRate    Decimal   @db.Decimal(10, 2)   // ages 7–12
   extraBedRate        Decimal   @db.Decimal(10, 2)   // max 1 per room (CWB)
   preschoolRate       Decimal   @default(0) @db.Decimal(10, 2) // always 0, stored for audit
+
+  // Transport
+  transportRate       Decimal   @default(0) @db.Decimal(10, 2) // per-person coach fee
 
   createdAt           DateTime  @default(now())
   updatedAt           DateTime  @updatedAt
@@ -165,6 +174,7 @@ model Occupant {
   room            Room         @relation(fields: [roomId], references: [id])
 
   fullName        String
+  dateOfBirth     DateTime
   nationality     String
   /// Stored as AES-256-GCM ciphertext (base64). Decrypt via lib/encryption.ts
   passportNumber  String
@@ -174,6 +184,8 @@ model Occupant {
   isStudent       Boolean      @default(false)
   /// CWB/CWOB for children; NOT_APPLICABLE for adults
   bedType         BedType      @default(NOT_APPLICABLE)
+  /// COACH = church-arranged transport; OWN_TRANSPORT = self-drive
+  transportMode   TransportMode @default(OWN_TRANSPORT)
 
   createdAt       DateTime     @default(now())
 

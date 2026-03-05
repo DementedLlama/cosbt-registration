@@ -225,7 +225,13 @@ export default async function RegistrationDetailPage({
                       </span>
                     )}
                   </div>
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
+                  <div className="grid grid-cols-2 sm:grid-cols-6 gap-3 text-sm">
+                    <div>
+                      <div className="text-xs text-gray-500">Date of Birth</div>
+                      <div className="text-gray-900">
+                        {formatDate(occ.dateOfBirth)}
+                      </div>
+                    </div>
                     <div>
                       <div className="text-xs text-gray-500">Nationality</div>
                       <div className="text-gray-900">{occ.nationality}</div>
@@ -250,6 +256,14 @@ export default async function RegistrationDetailPage({
                       <div className="text-xs text-gray-500">Bed Type</div>
                       <div className="text-gray-900">
                         {BED_TYPE_LABELS[occ.bedType] || occ.bedType}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-xs text-gray-500">Transport</div>
+                      <div className="text-gray-900">
+                        {occ.transportMode === "COACH"
+                          ? "Coach"
+                          : "Own transport"}
                       </div>
                     </div>
                   </div>

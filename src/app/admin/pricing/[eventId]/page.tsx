@@ -73,6 +73,7 @@ export default async function PricingDetailPage({
         childPrimaryRate: decimalToString(pricing.childPrimaryRate),
         extraBedRate: decimalToString(pricing.extraBedRate),
         preschoolRate: decimalToString(pricing.preschoolRate),
+        transportRate: decimalToString(pricing.transportRate),
       }
     : undefined;
 
@@ -147,6 +148,15 @@ export default async function PricingDetailPage({
                   {
                     label: "Preschool (0–6)",
                     value: pricing.preschoolRate,
+                  },
+                ]}
+              />
+              <RateSection
+                title="Transport"
+                rates={[
+                  {
+                    label: "Coach Transport (per person)",
+                    value: pricing.transportRate,
                   },
                 ]}
               />

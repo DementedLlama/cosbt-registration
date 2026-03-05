@@ -16,6 +16,7 @@ interface PricingFormProps {
     childPrimaryRate: string;
     extraBedRate: string;
     preschoolRate: string;
+    transportRate: string;
   };
 }
 
@@ -29,6 +30,7 @@ const RATE_FIELDS = [
   { key: "childPrimaryRate", label: "Child (Primary School, 7–12)" },
   { key: "extraBedRate", label: "Extra Bed Surcharge (CWB)" },
   { key: "preschoolRate", label: "Child (Preschool, 0–6)" },
+  { key: "transportRate", label: "Coach Transport (per person)" },
 ] as const;
 
 type RateKey = (typeof RATE_FIELDS)[number]["key"];
@@ -43,6 +45,7 @@ const DEFAULT_RATES: Record<RateKey, string> = {
   childPrimaryRate: "",
   extraBedRate: "",
   preschoolRate: "0.00",
+  transportRate: "",
 };
 
 export default function PricingForm({
@@ -192,7 +195,9 @@ export default function PricingForm({
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           {RATE_FIELDS.filter(
             (f) =>
-              !f.key.includes("Adult") && !f.key.includes("Student")
+              !f.key.includes("Adult") &&
+              !f.key.includes("Student") &&
+              !f.key.includes("transport")
           ).map((field) => (
             <div key={field.key}>
               <label htmlFor={field.key} className={labelClass}>
@@ -215,6 +220,39 @@ export default function PricingForm({
               </div>
             </div>
           ))}
+        </div>
+      </div>
+
+      {/* Transport Rate */}
+      <div>
+        <h3 className="text-sm font-semibold text-gray-900 mb-3 uppercase tracking-wide">
+          Transport
+        </h3>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          {RATE_FIELDS.filter((f) => f.key.includes("transport")).map(
+            (field) => (
+              <div key={field.key}>
+                <label htmlFor={field.key} className={labelClass}>
+                  {field.label} <span className="text-red-500">*</span>
+                </label>
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">
+                    $
+                  </span>
+                  <input
+                    id={field.key}
+                    type="text"
+                    inputMode="decimal"
+                    className={`${inputClass} pl-7`}
+                    placeholder="0.00"
+                    value={rates[field.key]}
+                    onChange={(e) => updateRate(field.key, e.target.value)}
+                    required
+                  />
+                </div>
+              </div>
+            )
+          )}
         </div>
       </div>
 

@@ -14,6 +14,9 @@ import { sendInvoiceEmail } from "@/lib/email";
 const OccupantSchema = z
   .object({
     fullName: z.string().min(1, "Full name is required"),
+    dateOfBirth: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/, "Invalid date format (expected YYYY-MM-DD)"),
     nationality: z.string().min(1, "Nationality is required"),
     passportNumber: z.string().min(1, "Passport / NRIC number is required"),
     // Bug fix: validate format AND that the date is strictly in the future
@@ -27,6 +30,7 @@ const OccupantSchema = z
     occupantType: z.enum(["ADULT", "CHILD_PRIMARY", "CHILD_PRESCHOOL"]),
     isStudent: z.boolean(),
     bedType: z.enum(["CWB", "CWOB", "NOT_APPLICABLE"]),
+    transportMode: z.enum(["COACH", "OWN_TRANSPORT"]),
   })
   // Bug fix: cross-field rules — enforce type-consistent bed/student values
   .refine(
@@ -78,6 +82,7 @@ type PricingRecord = {
   childPrimaryRate: unknown;
   extraBedRate: unknown;
   preschoolRate: unknown;
+  transportRate: unknown;
 };
 
 function calculateTotalAmount(
@@ -118,6 +123,11 @@ function calculateTotalAmount(
       if (o.bedType === "CWB") {
         total += Number(pricing.extraBedRate);
       }
+    }
+
+    // Coach transport surcharge (per person)
+    if (o.transportMode === "COACH") {
+      total += Number(pricing.transportRate);
     }
   }
 
@@ -165,10 +175,12 @@ function buildInvoiceHtml(params: {
           : o.bedType === "CWOB"
             ? " (shares bed)"
             : "";
+      const transportNote = o.transportMode === "COACH" ? "Coach" : "Own transport";
       return `
         <tr>
           <td style="padding:8px 12px;border-bottom:1px solid #eee">${escapeHtml(o.fullName)}</td>
           <td style="padding:8px 12px;border-bottom:1px solid #eee">${typeLabel}${bedNote}</td>
+          <td style="padding:8px 12px;border-bottom:1px solid #eee">${transportNote}</td>
           <td style="padding:8px 12px;border-bottom:1px solid #eee">${escapeHtml(o.nationality)}</td>
         </tr>`;
     })
@@ -228,6 +240,7 @@ function buildInvoiceHtml(params: {
           <tr style="background:#f5f5f5">
             <th style="padding:8px 12px;text-align:left;font-weight:600">Name</th>
             <th style="padding:8px 12px;text-align:left;font-weight:600">Type</th>
+            <th style="padding:8px 12px;text-align:left;font-weight:600">Transport</th>
             <th style="padding:8px 12px;text-align:left;font-weight:600">Nationality</th>
           </tr>
         </thead>
@@ -374,12 +387,14 @@ export async function POST(req: NextRequest) {
             occupants: {
               create: data.occupants.map((o) => ({
                 fullName: o.fullName,
+                dateOfBirth: new Date(o.dateOfBirth),
                 nationality: o.nationality,
                 passportNumber: encrypt(o.passportNumber),
                 passportExpiry: new Date(o.passportExpiry),
                 occupantType: o.occupantType,
                 isStudent: o.isStudent,
                 bedType: o.bedType,
+                transportMode: o.transportMode,
               })),
             },
           },

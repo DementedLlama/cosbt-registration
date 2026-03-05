@@ -76,6 +76,7 @@ export default async function RegisterPage() {
         childPrimaryRate: Number(event.pricingRubric.childPrimaryRate),
         extraBedRate: Number(event.pricingRubric.extraBedRate),
         preschoolRate: Number(event.pricingRubric.preschoolRate),
+        transportRate: Number(event.pricingRubric.transportRate),
       }
     : null;
 
