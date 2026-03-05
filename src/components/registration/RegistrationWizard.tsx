@@ -127,19 +127,17 @@ function StepIndicator({
           <div key={label} className="flex items-center flex-1 last:flex-none">
             <div className="flex items-center gap-2 shrink-0">
               <div
-                className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold transition-colors ${
-                  done || active
+                className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold transition-colors ${done || active
                     ? "text-white"
                     : "text-gray-400 border-2 border-gray-300 bg-white"
-                }`}
+                  }`}
                 style={done || active ? { backgroundColor: "var(--color-primary)" } : {}}
               >
                 {done ? "✓" : num}
               </div>
               <span
-                className={`text-sm font-medium hidden sm:block ${
-                  active ? "text-gray-900" : done ? "text-gray-500" : "text-gray-400"
-                }`}
+                className={`text-sm font-medium hidden sm:block ${active ? "text-gray-900" : done ? "text-gray-500" : "text-gray-400"
+                  }`}
               >
                 {label}
               </span>
@@ -797,6 +795,7 @@ function StepReview({
         pdpaConsent: contact.pdpaConsent,
         // Strip local _key before sending
         // _key is a local React key only — strip it before sending to the API
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
         occupants: occupants.map(({ _key, ...rest }) => rest),
       };
 
