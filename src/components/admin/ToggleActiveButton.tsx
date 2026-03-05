@@ -68,8 +68,8 @@ export default function ToggleActiveButton({
             onClick={handleToggle}
             disabled={loading}
             className={`text-xs font-medium px-2.5 py-1 rounded-md transition-colors disabled:opacity-50 ${isActive
-                    ? "bg-amber-100 text-amber-700 hover:bg-amber-200"
-                    : "bg-green-100 text-green-700 hover:bg-green-200"
+                ? "bg-amber-100 text-amber-700 hover:bg-amber-200"
+                : "bg-green-100 text-green-700 hover:bg-green-200"
                 }`}
         >
             {loading ? "…" : isActive ? "Deactivate" : "Activate"}

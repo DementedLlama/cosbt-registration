@@ -65,22 +65,24 @@ export async function GET(
             return NextResponse.json({ error: "Event not found" }, { status: 404 });
         }
 
+        const safeISO = (d: Date) => { try { return d.toISOString(); } catch { return ""; } };
+
         return NextResponse.json({
             data: {
                 id: event.id,
                 name: event.name,
                 venue: event.venue,
                 hotelName: event.hotelName,
-                startDate: event.startDate.toISOString(),
-                endDate: event.endDate.toISOString(),
-                registrationDeadline: event.registrationDeadline.toISOString(),
+                startDate: safeISO(event.startDate),
+                endDate: safeISO(event.endDate),
+                registrationDeadline: safeISO(event.registrationDeadline),
                 description: event.description,
                 isActive: event.isActive,
                 hasPricing: !!event.pricingRubric,
                 registrationCount: event._count.registrations,
                 roomCount: event._count.rooms,
-                createdAt: event.createdAt.toISOString(),
-                updatedAt: event.updatedAt.toISOString(),
+                createdAt: safeISO(event.createdAt),
+                updatedAt: safeISO(event.updatedAt),
             },
         });
     } catch (err) {
