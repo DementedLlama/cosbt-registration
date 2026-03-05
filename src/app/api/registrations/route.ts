@@ -9,6 +9,37 @@ import { generateInvoiceNumber } from "@/lib/invoice";
 import { logAudit, getClientIp } from "@/lib/audit";
 import { sendInvoiceEmail } from "@/lib/email";
 
+// ─── Rate Limiter (in-memory, per-IP) ────────────────────────────────────────
+
+const RATE_LIMIT_WINDOW_MS = 60_000; // 1 minute
+const RATE_LIMIT_MAX = 5; // max requests per window
+
+const ipHits = new Map<string, number[]>();
+
+function isRateLimited(ip: string): boolean {
+  const now = Date.now();
+  const hits = ipHits.get(ip) ?? [];
+  // Remove expired entries
+  const recent = hits.filter((t) => now - t < RATE_LIMIT_WINDOW_MS);
+  if (recent.length >= RATE_LIMIT_MAX) {
+    ipHits.set(ip, recent);
+    return true;
+  }
+  recent.push(now);
+  ipHits.set(ip, recent);
+  return false;
+}
+
+// Periodically clean up stale entries to prevent memory leak
+setInterval(() => {
+  const now = Date.now();
+  ipHits.forEach((hits, ip) => {
+    const recent = hits.filter((t: number) => now - t < RATE_LIMIT_WINDOW_MS);
+    if (recent.length === 0) ipHits.delete(ip);
+    else ipHits.set(ip, recent);
+  });
+}, 5 * 60_000); // every 5 minutes
+
 // ─── Zod Schema ───────────────────────────────────────────────────────────────
 
 const OccupantSchema = z
@@ -272,6 +303,15 @@ function buildInvoiceHtml(params: {
 // ─── Route handlers ───────────────────────────────────────────────────────────
 
 export async function POST(req: NextRequest) {
+  // Rate limit check
+  const clientIp = getClientIp(req) ?? "unknown";
+  if (isRateLimited(clientIp)) {
+    return NextResponse.json(
+      { error: "Too many requests. Please try again in a minute." },
+      { status: 429 }
+    );
+  }
+
   // Parse body
   let body: unknown;
   try {
@@ -354,58 +394,75 @@ export async function POST(req: NextRequest) {
   const packageType = determinePackageType(data.occupants);
   const totalAmount = calculateTotalAmount(data.occupants, event.pricingRubric);
 
-  // 6. Generate invoice number (own SERIALIZABLE transaction — must happen before DB write)
-  let invoiceNumber: string;
-  try {
-    invoiceNumber = await generateInvoiceNumber();
-  } catch (err) {
-    console.error("[registrations] Invoice generation failed:", err);
-    return NextResponse.json(
-      { error: "Failed to generate invoice number. Please try again." },
-      { status: 500 }
-    );
-  }
-
-  // 7. Create registration + room + occupants in a single transaction
+  // 6–7. Generate invoice number + create registration in a retry loop.
+  // If a unique constraint collision occurs on invoiceNumber (race between
+  // SERIALIZABLE read and INSERT), regenerate and retry.
+  const MAX_INVOICE_RETRIES = 3;
+  let invoiceNumber: string = "";
   let registration;
-  try {
-    registration = await prisma.registration.create({
-      data: {
-        campEventId: data.campEventId,
-        roomInChargeName: data.roomInChargeName,
-        roomInChargeEmail: data.roomInChargeEmail,
-        roomInChargeMobile: data.roomInChargeMobile,
-        roomInChargeChurch: data.roomInChargeChurch,
-        pdpaConsent: data.pdpaConsent,
-        pdpaConsentAt: new Date(),
-        rooms: {
-          create: {
-            campEventId: data.campEventId,
-            packageType,
-            invoiceNumber,
-            totalAmount,
-            occupants: {
-              create: data.occupants.map((o) => ({
-                fullName: o.fullName,
-                dateOfBirth: new Date(o.dateOfBirth),
-                nationality: o.nationality,
-                passportNumber: encrypt(o.passportNumber),
-                passportExpiry: new Date(o.passportExpiry),
-                occupantType: o.occupantType,
-                isStudent: o.isStudent,
-                bedType: o.bedType,
-                transportMode: o.transportMode,
-              })),
+
+  for (let attempt = 1; attempt <= MAX_INVOICE_RETRIES; attempt++) {
+    try {
+      invoiceNumber = await generateInvoiceNumber();
+
+      registration = await prisma.registration.create({
+        data: {
+          campEventId: data.campEventId,
+          roomInChargeName: data.roomInChargeName,
+          roomInChargeEmail: data.roomInChargeEmail,
+          roomInChargeMobile: data.roomInChargeMobile,
+          roomInChargeChurch: data.roomInChargeChurch,
+          pdpaConsent: data.pdpaConsent,
+          pdpaConsentAt: new Date(),
+          rooms: {
+            create: {
+              campEventId: data.campEventId,
+              packageType,
+              invoiceNumber,
+              totalAmount,
+              occupants: {
+                create: data.occupants.map((o) => ({
+                  fullName: o.fullName,
+                  dateOfBirth: new Date(o.dateOfBirth),
+                  nationality: o.nationality,
+                  passportNumber: encrypt(o.passportNumber),
+                  passportExpiry: new Date(o.passportExpiry),
+                  occupantType: o.occupantType,
+                  isStudent: o.isStudent,
+                  bedType: o.bedType,
+                  transportMode: o.transportMode,
+                })),
+              },
             },
           },
         },
-      },
-      include: { rooms: true },
-    });
-  } catch (err) {
-    console.error("[registrations] DB write failed:", err);
+        include: { rooms: true },
+      });
+
+      break; // success — exit retry loop
+    } catch (err) {
+      // Check if this is a unique constraint violation on invoiceNumber (P2002)
+      const isPrismaUnique =
+        err instanceof Object &&
+        "code" in err &&
+        (err as { code: string }).code === "P2002";
+      if (isPrismaUnique && attempt < MAX_INVOICE_RETRIES) {
+        console.warn(
+          `[registrations] Invoice collision on attempt ${attempt}, retrying...`
+        );
+        continue;
+      }
+      console.error("[registrations] Registration failed:", err);
+      return NextResponse.json(
+        { error: "Failed to save registration. Please try again." },
+        { status: 500 }
+      );
+    }
+  }
+
+  if (!registration) {
     return NextResponse.json(
-      { error: "Failed to save registration. Please try again." },
+      { error: "Failed to save registration after retries. Please try again." },
       { status: 500 }
     );
   }

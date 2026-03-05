@@ -6,6 +6,7 @@ import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { Prisma } from "@/generated/prisma/client";
 import RegistrationFilters from "@/components/admin/RegistrationFilters";
+import { ExportButton } from "@/components/admin/ExportButton";
 
 interface PageProps {
   searchParams: {
@@ -146,7 +147,10 @@ export default async function RegistrationsPage({
 
   return (
     <div>
-      <h1 className="text-2xl font-bold text-gray-900 mb-6">Registrations</h1>
+      <div className="flex items-center justify-between mb-6">
+        <h1 className="text-2xl font-bold text-gray-900">Registrations</h1>
+        <ExportButton eventId={searchParams.eventId} />
+      </div>
 
       {/* Filters */}
       <RegistrationFilters events={events} />

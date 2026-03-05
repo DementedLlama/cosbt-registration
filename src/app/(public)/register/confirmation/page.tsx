@@ -4,13 +4,12 @@ interface PageProps {
   searchParams: {
     invoice?: string;
     name?: string;
-    email?: string;
     total?: string;
   };
 }
 
 export default function ConfirmationPage({ searchParams }: PageProps) {
-  const { invoice, name, email, total } = searchParams;
+  const { invoice, name, total } = searchParams;
 
   if (!invoice) {
     return (
@@ -37,8 +36,7 @@ export default function ConfirmationPage({ searchParams }: PageProps) {
           Registration Received!
         </h2>
         <p className="text-gray-500 text-sm">
-          A confirmation email has been sent to{" "}
-          <strong>{email ?? "your email address"}</strong>.
+          A confirmation email has been sent to the email address you provided.
         </p>
       </div>
 

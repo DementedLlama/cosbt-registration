@@ -48,7 +48,7 @@ export async function GET(
     { params }: RouteContext
 ) {
     const session = await getServerSession(authOptions);
-    if (!session) {
+    if (!session || !session.user.isActive) {
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
@@ -101,7 +101,7 @@ export async function PUT(
     { params }: RouteContext
 ) {
     const session = await getServerSession(authOptions);
-    if (!session) {
+    if (!session || !session.user.isActive) {
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
     if (session.user.role === "VIEW_ONLY") {

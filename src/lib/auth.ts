@@ -91,9 +91,22 @@ export const authOptions: NextAuthOptions = {
 
     async session({ session, token }) {
       if (session.user) {
+        // Re-check DB on every session access to catch deactivated users mid-session.
+        const dbUser = await prisma.user.findUnique({
+          where: { id: token.id as string },
+          select: { isActive: true, role: true },
+        });
+
+        if (!dbUser || !dbUser.isActive) {
+          session.user.id = token.id;
+          session.user.role = token.role;
+          session.user.isActive = false;
+          return session;
+        }
+
         session.user.id = token.id;
-        session.user.role = token.role;
-        session.user.isActive = token.isActive;
+        session.user.role = dbUser.role;
+        session.user.isActive = dbUser.isActive;
       }
       return session;
     },

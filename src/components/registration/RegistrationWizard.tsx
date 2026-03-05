@@ -539,6 +539,86 @@ function OccupantCard({
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        {/* Full Name */}
+        <div>
+          <label className="form-label">
+            Full Name <span className="text-red-500">*</span>
+          </label>
+          <input
+            type="text"
+            className={`form-input ${personalLocked ? "bg-gray-100 text-gray-500" : ""}`}
+            placeholder="As per passport"
+            value={occupant.fullName}
+            onChange={(e) => onChange({ fullName: e.target.value })}
+            disabled={personalLocked}
+          />
+          {personalLocked && (
+            <p className="text-xs text-gray-400 mt-1">Pre-filled from Step 1. Go back to edit.</p>
+          )}
+        </div>
+
+        {/* Date of Birth */}
+        <div>
+          <label className="form-label">
+            Date of Birth <span className="text-red-500">*</span>
+          </label>
+          <input
+            type="date"
+            className={`form-input ${personalLocked ? "bg-gray-100 text-gray-500" : ""}`}
+            value={occupant.dateOfBirth}
+            onChange={(e) => onChange({ dateOfBirth: e.target.value })}
+            disabled={personalLocked}
+          />
+        </div>
+
+        {/* Nationality */}
+        <div>
+          <label className="form-label">
+            Nationality <span className="text-red-500">*</span>
+          </label>
+          <select
+            className={`form-input ${personalLocked ? "bg-gray-100 text-gray-500" : ""}`}
+            value={occupant.nationality}
+            onChange={(e) => onChange({ nationality: e.target.value })}
+            disabled={personalLocked}
+          >
+            <option value="">— Select —</option>
+            {COUNTRIES.map((c) => (
+              <option key={c} value={c}>{c}</option>
+            ))}
+          </select>
+        </div>
+
+        {/* Passport */}
+        <div>
+          <label className="form-label">
+            Passport No. <span className="text-red-500">*</span>
+          </label>
+          <input
+            type="text"
+            className={`form-input ${personalLocked ? "bg-gray-100 text-gray-500" : ""}`}
+            placeholder="Passport number"
+            value={occupant.passportNumber}
+            onChange={(e) => onChange({ passportNumber: e.target.value })}
+            disabled={personalLocked}
+          />
+        </div>
+
+        {/* Passport Expiry */}
+        <div>
+          <label className="form-label">
+            Passport Expiry Date <span className="text-red-500">*</span>
+          </label>
+          <input
+            type="date"
+            className={`form-input ${personalLocked ? "bg-gray-100 text-gray-500" : ""}`}
+            min={minExpiry}
+            value={occupant.passportExpiry}
+            onChange={(e) => onChange({ passportExpiry: e.target.value })}
+            disabled={personalLocked}
+          />
+        </div>
+
         {/* Occupant Type */}
         <div className="sm:col-span-2">
           <label className="form-label">
@@ -619,86 +699,6 @@ function OccupantCard({
               Coach transport fee will be added to the room total.
             </p>
           )}
-        </div>
-
-        {/* Full Name */}
-        <div>
-          <label className="form-label">
-            Full Name <span className="text-red-500">*</span>
-          </label>
-          <input
-            type="text"
-            className={`form-input ${personalLocked ? "bg-gray-100 text-gray-500" : ""}`}
-            placeholder="As per passport"
-            value={occupant.fullName}
-            onChange={(e) => onChange({ fullName: e.target.value })}
-            disabled={personalLocked}
-          />
-          {personalLocked && (
-            <p className="text-xs text-gray-400 mt-1">Pre-filled from Step 1. Go back to edit.</p>
-          )}
-        </div>
-
-        {/* Date of Birth */}
-        <div>
-          <label className="form-label">
-            Date of Birth <span className="text-red-500">*</span>
-          </label>
-          <input
-            type="date"
-            className={`form-input ${personalLocked ? "bg-gray-100 text-gray-500" : ""}`}
-            value={occupant.dateOfBirth}
-            onChange={(e) => onChange({ dateOfBirth: e.target.value })}
-            disabled={personalLocked}
-          />
-        </div>
-
-        {/* Nationality */}
-        <div>
-          <label className="form-label">
-            Nationality <span className="text-red-500">*</span>
-          </label>
-          <select
-            className={`form-input ${personalLocked ? "bg-gray-100 text-gray-500" : ""}`}
-            value={occupant.nationality}
-            onChange={(e) => onChange({ nationality: e.target.value })}
-            disabled={personalLocked}
-          >
-            <option value="">— Select —</option>
-            {COUNTRIES.map((c) => (
-              <option key={c} value={c}>{c}</option>
-            ))}
-          </select>
-        </div>
-
-        {/* Passport */}
-        <div>
-          <label className="form-label">
-            Passport No. <span className="text-red-500">*</span>
-          </label>
-          <input
-            type="text"
-            className={`form-input ${personalLocked ? "bg-gray-100 text-gray-500" : ""}`}
-            placeholder="Passport number"
-            value={occupant.passportNumber}
-            onChange={(e) => onChange({ passportNumber: e.target.value })}
-            disabled={personalLocked}
-          />
-        </div>
-
-        {/* Passport Expiry */}
-        <div>
-          <label className="form-label">
-            Passport Expiry Date <span className="text-red-500">*</span>
-          </label>
-          <input
-            type="date"
-            className={`form-input ${personalLocked ? "bg-gray-100 text-gray-500" : ""}`}
-            min={minExpiry}
-            value={occupant.passportExpiry}
-            onChange={(e) => onChange({ passportExpiry: e.target.value })}
-            disabled={personalLocked}
-          />
         </div>
       </div>
     </div>
@@ -1023,7 +1023,6 @@ function StepReview({
       const params = new URLSearchParams({
         invoice: json.invoiceNumber,
         name: occupants[0].fullName,
-        email: contact.roomInChargeEmail,
         total: total.toFixed(2),
       });
       router.push(`/register/confirmation?${params.toString()}`);
