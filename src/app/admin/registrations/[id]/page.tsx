@@ -56,6 +56,11 @@ const BED_TYPE_LABELS: Record<string, string> = {
   NOT_APPLICABLE: "—",
 };
 
+const BED_CONFIG_LABELS: Record<string, string> = {
+  TWIN_BED: "Twin beds",
+  KING_BED: "King-sized bed",
+};
+
 export default async function RegistrationDetailPage({
   params,
 }: {
@@ -147,11 +152,17 @@ export default async function RegistrationDetailPage({
       </div>
 
       {/* Summary cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-4 mb-6">
         <div className="card p-4">
           <div className="text-xs text-gray-500 mb-1">Package</div>
           <div className="text-lg font-bold text-gray-900">
             {room.packageType}
+          </div>
+        </div>
+        <div className="card p-4">
+          <div className="text-xs text-gray-500 mb-1">Bed Config</div>
+          <div className="text-sm font-bold text-gray-900">
+            {BED_CONFIG_LABELS[room.bedConfig] || room.bedConfig}
           </div>
         </div>
         <div className="card p-4">

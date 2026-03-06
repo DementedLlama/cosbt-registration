@@ -43,6 +43,12 @@ enum BedType {
   NOT_APPLICABLE
 }
 
+/// TWIN_BED = two single beds | KING_BED = one king-sized bed
+enum RoomBedConfig {
+  TWIN_BED
+  KING_BED
+}
+
 /// COACH = church-arranged coach transport | OWN_TRANSPORT = self-drive / own arrangement
 enum TransportMode {
   COACH
@@ -148,6 +154,8 @@ model Room {
 
   /// SINGLE/TWIN/TRIPLE based on adult+student count only (children are add-ons)
   packageType    PackageType
+  /// TWIN_BED = two single beds | KING_BED = one king-sized bed
+  bedConfig      RoomBedConfig @default(TWIN_BED)
   /// Format: COSBT-YYYY-NNNN, unique, auto-generated
   invoiceNumber  String        @unique
   paymentStatus  PaymentStatus @default(UNPAID)

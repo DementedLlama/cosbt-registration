@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 
 type OccupantType = "ADULT" | "CHILD_PRIMARY" | "CHILD_PRESCHOOL";
 type BedType = "CWB" | "CWOB" | "NOT_APPLICABLE";
+type RoomBedConfig = "TWIN_BED" | "KING_BED";
 type TransportMode = "COACH" | "OWN_TRANSPORT";
 
 interface OccupantInput {
@@ -819,12 +820,16 @@ function PricePanel({
 function StepOccupants({
   occupants,
   pricing,
+  bedConfig,
+  onBedConfigChange,
   onChange,
   onBack,
   onNext,
 }: {
   occupants: OccupantInput[];
   pricing: PricingData | null;
+  bedConfig: RoomBedConfig;
+  onBedConfigChange: (config: RoomBedConfig) => void;
   onChange: (occupants: OccupantInput[]) => void;
   onBack: () => void;
   onNext: () => void;
@@ -886,6 +891,21 @@ function StepOccupants({
             Add anyone else sharing this room. The room package (Single / Twin /
             Triple) is determined by the number of adults and students.
           </p>
+
+          {/* Bed Configuration */}
+          <div className="card p-4 mb-4">
+            <label className="form-label">
+              Bed Configuration <span className="text-red-500">*</span>
+            </label>
+            <select
+              className="form-input"
+              value={bedConfig}
+              onChange={(e) => onBedConfigChange(e.target.value as RoomBedConfig)}
+            >
+              <option value="TWIN_BED">Twin beds (two single beds)</option>
+              <option value="KING_BED">King-sized bed</option>
+            </select>
+          </div>
 
           {occupants.map((occ, idx) => (
             <OccupantCard
@@ -972,12 +992,14 @@ function StepReview({
   occupants,
   pricing,
   campEventId,
+  bedConfig,
   onBack,
 }: {
   contact: ContactState;
   occupants: OccupantInput[];
   pricing: PricingData | null;
   campEventId: string;
+  bedConfig: RoomBedConfig;
   onBack: () => void;
 }) {
   const router = useRouter();
@@ -999,6 +1021,7 @@ function StepReview({
         roomInChargeMobile: contact.roomInChargeMobile,
         roomInChargeChurch: contact.roomInChargeChurch,
         pdpaConsent: contact.pdpaConsent,
+        bedConfig,
         // Strip local _key before sending
         // _key is a local React key only — strip it before sending to the API
         // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -1083,6 +1106,13 @@ function StepReview({
               </span>
             )}
           </div>
+        </div>
+
+        <div className="text-sm text-gray-600 mb-3">
+          <span className="text-gray-500">Bed configuration:</span>{" "}
+          <span className="font-medium">
+            {bedConfig === "KING_BED" ? "King-sized bed" : "Twin beds"}
+          </span>
         </div>
 
         <table className="w-full text-sm">
@@ -1208,6 +1238,7 @@ export default function RegistrationWizard({ campEventId, pricing }: Props) {
   const [occupants, setOccupants] = useState<OccupantInput[]>([
     newOccupant("ADULT"),
   ]);
+  const [bedConfig, setBedConfig] = useState<RoomBedConfig>("TWIN_BED");
 
   // Sync contact details into Occupant 1 when advancing from Step 1 → Step 2
   function handleStep1Next() {
@@ -1242,6 +1273,8 @@ export default function RegistrationWizard({ campEventId, pricing }: Props) {
         <StepOccupants
           occupants={occupants}
           pricing={pricing}
+          bedConfig={bedConfig}
+          onBedConfigChange={setBedConfig}
           onChange={setOccupants}
           onBack={() => setStep(1)}
           onNext={() => setStep(3)}
@@ -1254,6 +1287,7 @@ export default function RegistrationWizard({ campEventId, pricing }: Props) {
           occupants={occupants}
           pricing={pricing}
           campEventId={campEventId}
+          bedConfig={bedConfig}
           onBack={() => setStep(2)}
         />
       )}

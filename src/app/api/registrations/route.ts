@@ -54,6 +54,7 @@ const RegistrationSchema = z.object({
   roomInChargeMobile: z.string().min(1, "Mobile number is required"),
   roomInChargeChurch: z.string().min(1, "Church / ministry is required"),
   pdpaConsent: z.literal(true),
+  bedConfig: z.enum(["TWIN_BED", "KING_BED"]).default("TWIN_BED"),
   occupants: z
     .array(OccupantSchema)
     .min(1, "At least one occupant is required")
@@ -157,6 +158,7 @@ function buildInvoiceHtml(params: {
   eventDates: string;
   hotelName: string;
   packageType: string;
+  bedConfig: string;
   occupants: OccupantInput[];
   totalAmount: number;
 }): string {
@@ -224,6 +226,10 @@ function buildInvoiceHtml(params: {
         <tr>
           <td style="padding:6px 0;color:#777">Room Package</td>
           <td style="padding:6px 0">${escapeHtml(params.packageType)}</td>
+        </tr>
+        <tr>
+          <td style="padding:6px 0;color:#777">Bed Configuration</td>
+          <td style="padding:6px 0">${escapeHtml(params.bedConfig === "KING_BED" ? "King-sized bed" : "Twin beds")}</td>
         </tr>
         <tr>
           <td style="padding:6px 0;color:#777">Church / Ministry</td>
@@ -391,6 +397,7 @@ export async function POST(req: NextRequest) {
             create: {
               campEventId: data.campEventId,
               packageType,
+              bedConfig: data.bedConfig,
               invoiceNumber,
               totalAmount,
               occupants: {
@@ -459,6 +466,7 @@ export async function POST(req: NextRequest) {
     eventDates: `${event.startDate.toLocaleDateString("en-SG")} – ${event.endDate.toLocaleDateString("en-SG")}`,
     hotelName: event.hotelName,
     packageType,
+    bedConfig: data.bedConfig,
     occupants: data.occupants,
     totalAmount,
   });
