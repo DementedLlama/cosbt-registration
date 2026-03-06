@@ -1,26 +1,28 @@
 /**
- * GET /api/admin/registrations/export — download registrations as Excel
- * Query params: ?eventId=xxx (optional, filters by event)
- * Requires ADMIN or SUPER_ADMIN role.
+ * Standalone Excel export test — bypasses auth to export all registrations.
+ *
+ * Run with:
+ *   DATABASE_URL="postgresql://cosbt:cosbt@localhost:5432/cosbt_camp" npx tsx prisma/export-test.ts
  */
-import { NextRequest, NextResponse } from "next/server";
-import { requireAdminSession } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
-import { logAudit, getClientIp } from "@/lib/audit";
+
+import { PrismaClient } from "../src/generated/prisma/client";
+import { PrismaPg } from "@prisma/adapter-pg";
 import ExcelJS from "exceljs";
+import { writeFileSync } from "fs";
+import path from "path";
 
-export async function GET(req: NextRequest) {
-  const result = await requireAdminSession();
-  if (result instanceof NextResponse) return result;
-  const session = result;
-  if (!["ADMIN", "SUPER_ADMIN"].includes(session.user.role)) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
+const databaseUrl = process.env.DATABASE_URL;
+if (!databaseUrl) throw new Error("DATABASE_URL is not set.");
 
-  const eventId = req.nextUrl.searchParams.get("eventId") || undefined;
+const adapter = new PrismaPg({ connectionString: databaseUrl });
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const prisma = new PrismaClient({ adapter } as any);
+
+async function main() {
+  console.log("[export] Querying all rooms...");
+  const startQuery = Date.now();
 
   const rooms = await prisma.room.findMany({
-    where: eventId ? { campEventId: eventId } : {},
     orderBy: { createdAt: "desc" },
     include: {
       registration: {
@@ -42,14 +44,17 @@ export async function GET(req: NextRequest) {
           isStudent: true,
           bedType: true,
           transportMode: true,
-          nokName: true,
-          nokContact: true,
         },
       },
     },
   });
 
-  // Build Excel workbook
+  const queryMs = Date.now() - startQuery;
+  const totalOccupants = rooms.reduce((sum, r) => sum + r.occupants.length, 0);
+  console.log(`[export] Query done in ${queryMs}ms — ${rooms.length} rooms, ${totalOccupants} occupants`);
+
+  // Build Excel workbook (same logic as the API route)
+  const startExcel = Date.now();
   const workbook = new ExcelJS.Workbook();
   const sheet = workbook.addWorksheet("Registrations");
 
@@ -70,12 +75,9 @@ export async function GET(req: NextRequest) {
     { header: "Student", key: "student", width: 8 },
     { header: "Bed", key: "bed", width: 16 },
     { header: "Transport", key: "transport", width: 14 },
-    { header: "Next of Kin", key: "nokName", width: 22 },
-    { header: "NOK Contact", key: "nokContact", width: 16 },
     { header: "Registered", key: "registered", width: 18 },
   ];
 
-  // Bold header row
   sheet.getRow(1).font = { bold: true };
 
   for (const room of rooms) {
@@ -98,33 +100,27 @@ export async function GET(req: NextRequest) {
         student: occ.isStudent ? "Yes" : "No",
         bed: occ.bedType.replace(/_/g, " "),
         transport: occ.transportMode === "COACH" ? "Coach" : "Own",
-        nokName: occ.nokName,
-        nokContact: occ.nokContact,
         registered: room.createdAt.toISOString().split("T")[0],
       });
     }
   }
 
   const buffer = await workbook.xlsx.writeBuffer();
+  const excelMs = Date.now() - startExcel;
 
-  void logAudit({
-    userId: session.user.id,
-    action: "EXPORT_MANIFEST",
-    targetTable: "Room",
-    targetId: eventId ?? "all",
-    ipAddress: getClientIp(req),
-  });
+  const outPath = path.join(process.cwd(), "registrations-export-test.xlsx");
+  writeFileSync(outPath, Buffer.from(buffer));
 
-  const filename = eventId
-    ? `registrations-${eventId.slice(0, 8)}.xlsx`
-    : "registrations-all.xlsx";
-
-  return new NextResponse(buffer, {
-    status: 200,
-    headers: {
-      "Content-Type":
-        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-      "Content-Disposition": `attachment; filename="${filename}"`,
-    },
-  });
+  console.log(`[export] Excel built in ${excelMs}ms — ${totalOccupants} rows`);
+  console.log(`[export] Saved to: ${outPath}`);
+  console.log(`[export] File size: ${(Buffer.from(buffer).length / 1024).toFixed(1)} KB`);
 }
+
+main()
+  .catch((e) => {
+    console.error("[export] Error:", e);
+    process.exit(1);
+  })
+  .finally(async () => {
+    await prisma.$disconnect();
+  });

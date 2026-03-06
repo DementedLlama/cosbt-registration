@@ -129,21 +129,14 @@ In `.env` (committed, local dev only):
 
 Optional (AWS, leave empty for local dev): `AWS_REGION`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_S3_BUCKET`, `AWS_SES_FROM_EMAIL`
 
-## Known Issues
+## Potential Future Enhancements
 
-1. **Invoice race condition** — INSERT happens outside SERIALIZABLE tx. Two simultaneous submissions can collide; `@unique` constraint catches it as a 500. Needs retry loop.
-2. **Deactivated users stay logged in** — JWT valid for 8 hours, session callback doesn't re-query DB.
-3. **No rate limiting** on `POST /api/registrations`.
-4. **Email in confirmation URL** — visible in browser history/logs.
-
-## What's Left to Build
-
-1. **Admin: User Accounts** — SUPER_ADMIN CRUD at `/admin/users` + `/api/admin/users`
-2. **Admin: Export** — download registrations as Excel/CSV
-
-## Working Tree State
-
-There are uncommitted changes for `dateOfBirth` + `transportMode` features. Review `git status` before starting new work.
+- Vercel deployment + AWS RDS setup
+- Production rate limiting (e.g., Upstash Redis) to replace in-memory limiter
+- Email verification for registrants
+- Bulk payment status update in admin
+- Registration cancellation flow
+- Dashboard charts/analytics
 
 ## Context Management
 

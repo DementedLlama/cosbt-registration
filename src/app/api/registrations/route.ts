@@ -32,6 +32,8 @@ const OccupantSchema = z
     isStudent: z.boolean(),
     bedType: z.enum(["CWB", "CWOB", "NOT_APPLICABLE"]),
     transportMode: z.enum(["COACH", "OWN_TRANSPORT"]),
+    nokName: z.string().min(1, "Next of Kin name is required"),
+    nokContact: z.string().min(1, "Next of Kin contact number is required"),
   })
   // Bug fix: cross-field rules — enforce type-consistent bed/student values
   .refine(
@@ -404,6 +406,8 @@ export async function POST(req: NextRequest) {
                   isStudent: o.isStudent,
                   bedType: o.bedType,
                   transportMode: o.transportMode,
+                  nokName: o.nokName,
+                  nokContact: o.nokContact,
                 })),
               },
             },

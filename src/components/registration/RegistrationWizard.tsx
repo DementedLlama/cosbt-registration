@@ -20,6 +20,8 @@ interface OccupantInput {
   isStudent: boolean;
   bedType: BedType;
   transportMode: TransportMode;
+  nokName: string;
+  nokContact: string;
 }
 
 interface ContactState {
@@ -113,6 +115,8 @@ function newOccupant(type: OccupantType = "ADULT"): OccupantInput {
     isStudent: false,
     bedType: type === "ADULT" ? "NOT_APPLICABLE" : "CWOB",
     transportMode: "COACH",
+    nokName: "",
+    nokContact: "",
   };
 }
 
@@ -463,6 +467,7 @@ function OccupantCard({
   isRoomIC,
   canRemove,
   cwbAlreadyTaken,
+  nokLocked,
   onChange,
   onRemove,
 }: {
@@ -471,6 +476,7 @@ function OccupantCard({
   isRoomIC: boolean;
   canRemove: boolean;
   cwbAlreadyTaken: boolean;
+  nokLocked: boolean;
   onChange: (patch: Partial<OccupantInput>) => void;
   onRemove: () => void;
 }) {
@@ -700,6 +706,37 @@ function OccupantCard({
             </p>
           )}
         </div>
+
+        {/* Next of Kin */}
+        <div>
+          <label className="form-label">
+            Next of Kin — Name <span className="text-red-500">*</span>
+          </label>
+          <input
+            type="text"
+            className={`form-input ${nokLocked ? "bg-gray-100 text-gray-500" : ""}`}
+            placeholder="Next of kin full name"
+            value={occupant.nokName}
+            onChange={(e) => onChange({ nokName: e.target.value })}
+            disabled={nokLocked}
+          />
+        </div>
+        <div>
+          <label className="form-label">
+            Next of Kin — Contact No. <span className="text-red-500">*</span>
+          </label>
+          <input
+            type="text"
+            className={`form-input ${nokLocked ? "bg-gray-100 text-gray-500" : ""}`}
+            placeholder="Contact number"
+            value={occupant.nokContact}
+            onChange={(e) => onChange({ nokContact: e.target.value })}
+            disabled={nokLocked}
+          />
+          {nokLocked && (
+            <p className="text-xs text-gray-400 mt-1">Copied from Occupant 1.</p>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -831,10 +868,17 @@ function StepOccupants({
 }) {
   const [errors, setErrors] = useState<string[]>([]);
 
+  const [sameNok, setSameNok] = useState(false);
+
   const adultCount = occupants.filter((o) => o.occupantType === "ADULT").length;
   const cwbOccupantKey = occupants.find((o) => o.bedType === "CWB")?._key;
 
   function update(key: string, patch: Partial<OccupantInput>) {
+    // If "same NOK" is on and this is a NOK field change on occupant 1, propagate to all
+    if (sameNok && key === occupants[0]._key && (patch.nokName !== undefined || patch.nokContact !== undefined)) {
+      onChange(occupants.map((o) => (o._key === key ? { ...o, ...patch } : { ...o, ...patch })));
+      return;
+    }
     onChange(occupants.map((o) => (o._key === key ? { ...o, ...patch } : o)));
   }
 
@@ -863,6 +907,10 @@ function StepOccupants({
         errs.push(`Occupant ${n}: Passport expiry date is required.`);
       else if (new Date(o.passportExpiry) <= new Date())
         errs.push(`Occupant ${n}: Passport expiry date must be in the future.`);
+      if (!o.nokName.trim())
+        errs.push(`Occupant ${n}: Next of Kin name is required.`);
+      if (!o.nokContact.trim())
+        errs.push(`Occupant ${n}: Next of Kin contact number is required.`);
     });
     return errs;
   }
@@ -887,6 +935,34 @@ function StepOccupants({
             Triple) is determined by the number of adults and students.
           </p>
 
+          {occupants.length > 1 && (
+            <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={sameNok}
+                  onChange={(e) => {
+                    const checked = e.target.checked;
+                    setSameNok(checked);
+                    if (checked) {
+                      // Copy NOK from occupant 1 to all others
+                      const { nokName, nokContact } = occupants[0];
+                      onChange(occupants.map((o) => ({ ...o, nokName, nokContact })));
+                    }
+                  }}
+                />
+                <span className="text-sm text-gray-700">
+                  Same Next of Kin for all occupants
+                </span>
+              </label>
+              {sameNok && (
+                <p className="text-xs text-blue-600 mt-1 ml-6">
+                  Next of Kin details from Occupant 1 will apply to everyone.
+                </p>
+              )}
+            </div>
+          )}
+
           {occupants.map((occ, idx) => (
             <OccupantCard
               key={occ._key}
@@ -897,6 +973,7 @@ function StepOccupants({
               cwbAlreadyTaken={
                 cwbOccupantKey !== undefined && cwbOccupantKey !== occ._key
               }
+              nokLocked={sameNok && idx > 0}
               onChange={(patch) => update(occ._key, patch)}
               onRemove={() => remove(occ._key)}
             />
@@ -1090,6 +1167,7 @@ function StepReview({
             <tr className="border-b">
               <th className="pb-2 text-left font-medium text-gray-500">Name</th>
               <th className="pb-2 text-left font-medium text-gray-500">Type</th>
+              <th className="pb-2 text-left font-medium text-gray-500">Next of Kin</th>
               <th className="pb-2 text-right font-medium text-gray-500">
                 Amount
               </th>
@@ -1112,6 +1190,10 @@ function StepReview({
                     {o.fullName || `Occupant ${i + 1}`}
                   </td>
                   <td className="py-2 text-gray-500">{typeLabel}</td>
+                  <td className="py-2 text-gray-500 text-xs">
+                    {o.nokName}
+                    {o.nokContact && <span className="block">{o.nokContact}</span>}
+                  </td>
                   <td className="py-2 text-right">S${rate.toFixed(2)}</td>
                 </tr>
               );
@@ -1121,7 +1203,7 @@ function StepReview({
               .filter((o) => o.bedType === "CWB")
               .map((o) => (
                 <tr key={`cwb_${o._key}`}>
-                  <td className="py-2 text-gray-400 italic" colSpan={2}>
+                  <td className="py-2 text-gray-400 italic" colSpan={3}>
                     Extra bed — {o.fullName || "child"}
                   </td>
                   <td className="py-2 text-right">
@@ -1134,7 +1216,7 @@ function StepReview({
               .filter((o) => o.transportMode === "COACH")
               .map((o) => (
                 <tr key={`transport_${o._key}`}>
-                  <td className="py-2 text-blue-600 italic" colSpan={2}>
+                  <td className="py-2 text-blue-600 italic" colSpan={3}>
                     Coach transport — {o.fullName || `Occupant`}
                   </td>
                   <td className="py-2 text-right">
@@ -1145,7 +1227,7 @@ function StepReview({
           </tbody>
           <tfoot>
             <tr className="border-t">
-              <td colSpan={2} className="pt-3 font-bold">
+              <td colSpan={3} className="pt-3 font-bold">
                 Total
               </td>
               <td

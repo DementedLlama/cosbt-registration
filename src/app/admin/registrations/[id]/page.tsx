@@ -225,7 +225,7 @@ export default async function RegistrationDetailPage({
                       </span>
                     )}
                   </div>
-                  <div className="grid grid-cols-2 sm:grid-cols-6 gap-3 text-sm">
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
                     <div>
                       <div className="text-xs text-gray-500">Date of Birth</div>
                       <div className="text-gray-900">
@@ -264,6 +264,18 @@ export default async function RegistrationDetailPage({
                         {occ.transportMode === "COACH"
                           ? "Coach"
                           : "Own transport"}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-xs text-gray-500">Next of Kin</div>
+                      <div className="text-gray-900">
+                        {occ.nokName || "—"}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-xs text-gray-500">NOK Contact</div>
+                      <div className="text-gray-900">
+                        {occ.nokContact || "—"}
                       </div>
                     </div>
                   </div>

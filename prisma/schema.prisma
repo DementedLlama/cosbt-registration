@@ -186,6 +186,10 @@ model Occupant {
   /// COACH = church-arranged transport; OWN_TRANSPORT = self-drive
   transportMode   TransportMode @default(OWN_TRANSPORT)
 
+  /// Next of Kin
+  nokName         String        @default("")
+  nokContact      String        @default("")
+
   createdAt       DateTime     @default(now())
 
   @@index([roomId])
